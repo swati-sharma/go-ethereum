@@ -44,9 +44,9 @@ func NewCircuitCapacityChecker(lightMode bool) *CircuitCapacityChecker {
 }
 
 // Reset resets a CircuitCapacityChecker
-func (ccc *CircuitCapacityChecker) Reset() {
-	ccc.Lock()
-	defer ccc.Unlock()
+func Reset(ccc *CircuitCapacityChecker) {
+	creationMu.Lock()
+	defer creationMu.Unlock()
 
 	C.reset_circuit_capacity_checker(C.uint64_t(ccc.ID))
 }
@@ -189,7 +189,7 @@ func (ccc *CircuitCapacityChecker) SetLightMode(lightMode bool) error {
 		return fmt.Errorf("fail to json unmarshal set_light_mode result, id: %d, err: %w", ccc.ID, err)
 	}
 	if result.Error != "" {
-		return fmt.Errorf("fail to set_light_mode in CircuitCapacityChecker, id: %d, err: %w", ccc.ID, result.Error)
+		return fmt.Errorf("fail to set_light_mode in CircuitCapacityChecker, id: %d, err: %s", ccc.ID, result.Error)
 	}
 
 	return nil
