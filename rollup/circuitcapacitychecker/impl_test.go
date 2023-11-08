@@ -16,7 +16,7 @@ type traceContainer struct {
 }
 
 func BenchmarkApplyBlock(b *testing.B) {
-	ccc := NewCircuitCapacityChecker(false)
+	ccc := NewCircuitCapacityChecker(true)
 
 	dir, err := os.ReadDir("block-traces")
 	if err != nil {
