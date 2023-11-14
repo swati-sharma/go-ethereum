@@ -125,7 +125,22 @@ var PrecompiledContractsBLS = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{18}): &bls12381MapG2{},
 }
 
+// PrecompiledContractsHardfork contains the default set of pre-compiled Ethereum
+// contracts used in the Hardfork release. Same as Archimedes but ... (to be updated)
+var PrecompiledContractsHardfork = map[common.Address]PrecompiledContract{
+	common.BytesToAddress([]byte{1}): &ecrecover{},
+	common.BytesToAddress([]byte{2}): &sha256hashDisabled{},
+	common.BytesToAddress([]byte{3}): &ripemd160hashDisabled{},
+	common.BytesToAddress([]byte{4}): &dataCopy{},
+	common.BytesToAddress([]byte{5}): &bigModExp{eip2565: true},
+	common.BytesToAddress([]byte{6}): &bn256AddIstanbul{},
+	common.BytesToAddress([]byte{7}): &bn256ScalarMulIstanbul{},
+	common.BytesToAddress([]byte{8}): &bn256PairingIstanbul{},
+	common.BytesToAddress([]byte{9}): &blake2FDisabled{},
+}
+
 var (
+	PrecompiledAddressesHardfork   []common.Address
 	PrecompiledAddressesArchimedes []common.Address
 	PrecompiledAddressesBerlin     []common.Address
 	PrecompiledAddressesIstanbul   []common.Address
@@ -149,11 +164,16 @@ func init() {
 	for k := range PrecompiledContractsArchimedes {
 		PrecompiledAddressesArchimedes = append(PrecompiledAddressesArchimedes, k)
 	}
+	for k := range PrecompiledContractsHardfork {
+		PrecompiledAddressesHardfork = append(PrecompiledAddressesHardfork, k)
+	}
 }
 
 // ActivePrecompiles returns the precompiles enabled with the current configuration.
 func ActivePrecompiles(rules params.Rules) []common.Address {
 	switch {
+	case rules.IsHardFork:
+		return PrecompiledAddressesHardfork
 	case rules.IsArchimedes:
 		return PrecompiledAddressesArchimedes
 	case rules.IsBerlin:
@@ -309,9 +329,10 @@ var (
 // modexpMultComplexity implements bigModexp multComplexity formula, as defined in EIP-198
 //
 // def mult_complexity(x):
-//    if x <= 64: return x ** 2
-//    elif x <= 1024: return x ** 2 // 4 + 96 * x - 3072
-//    else: return x ** 2 // 16 + 480 * x - 199680
+//
+//	if x <= 64: return x ** 2
+//	elif x <= 1024: return x ** 2 // 4 + 96 * x - 3072
+//	else: return x ** 2 // 16 + 480 * x - 199680
 //
 // where is x is max(length_of_MODULUS, length_of_BASE)
 func modexpMultComplexity(x *big.Int) *big.Int {
