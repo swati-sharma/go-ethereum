@@ -126,10 +126,10 @@ var PrecompiledContractsBLS = map[common.Address]PrecompiledContract{
 }
 
 // PrecompiledContractsHardfork contains the default set of pre-compiled Ethereum
-// contracts used in the Hardfork release. Same as Archimedes but ... (to be updated)
+// contracts used in the Hardfork release. Same as Archimedes but with sha256hash enabled again
 var PrecompiledContractsHardfork = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{1}): &ecrecover{},
-	common.BytesToAddress([]byte{2}): &sha256hashDisabled{},
+	common.BytesToAddress([]byte{2}): &sha256hash{},
 	common.BytesToAddress([]byte{3}): &ripemd160hashDisabled{},
 	common.BytesToAddress([]byte{4}): &dataCopy{},
 	common.BytesToAddress([]byte{5}): &bigModExp{eip2565: true},
