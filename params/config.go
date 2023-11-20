@@ -289,8 +289,8 @@ var (
 			MaxTxPerBlock:             &ScrollMaxTxPerBlock,
 			MaxTxPayloadBytesPerBlock: &ScrollMaxTxPayloadBytesPerBlock,
 			FeeVaultAddress:           &rcfg.ScrollFeeVaultAddress,
-			EnableEIP2718:             false,
-			EnableEIP1559:             false,
+			EnableEIP2718:             true,
+			EnableEIP1559:             true,
 			L1Config: &L1Config{
 				L1ChainId:             5,
 				L1MessageQueueAddress: common.HexToAddress("0x79DB48002Aa861C8cb189cabc21c6B1468BC83BB"),
@@ -328,8 +328,8 @@ var (
 			MaxTxPerBlock:             &ScrollMaxTxPerBlock,
 			MaxTxPayloadBytesPerBlock: &ScrollMaxTxPayloadBytesPerBlock,
 			FeeVaultAddress:           &rcfg.ScrollFeeVaultAddress,
-			EnableEIP2718:             false,
-			EnableEIP1559:             false,
+			EnableEIP2718:             true,
+			EnableEIP1559:             true,
 			L1Config: &L1Config{
 				L1ChainId:             11155111,
 				L1MessageQueueAddress: common.HexToAddress("0xF0B2293F5D834eAe920c6974D50957A1732de763"),
@@ -367,8 +367,8 @@ var (
 			MaxTxPerBlock:             &ScrollMaxTxPerBlock,
 			MaxTxPayloadBytesPerBlock: &ScrollMaxTxPayloadBytesPerBlock,
 			FeeVaultAddress:           &rcfg.ScrollFeeVaultAddress,
-			EnableEIP2718:             false,
-			EnableEIP1559:             false,
+			EnableEIP2718:             true,
+			EnableEIP1559:             true,
 			L1Config: &L1Config{
 				L1ChainId:             1,
 				L1MessageQueueAddress: common.HexToAddress("0x0d7E906BD9cAFa154b048cFa766Cc1E54E39AF9B"),
