@@ -394,7 +394,7 @@ func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Tr
 		Time:      parent.Time() + 10,
 		UncleHash: types.EmptyUncleHash,
 	}
-	if config.IsLondon(header.Number) {
+	if config.IsHardFork(header.Number) {
 		header.BaseFee = misc.CalcBaseFee(config, parent.Header())
 	}
 	var receipts []*types.Receipt

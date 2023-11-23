@@ -40,7 +40,7 @@ type sigCache struct {
 func MakeSigner(config *params.ChainConfig, blockNumber *big.Int) Signer {
 	var signer Signer
 	switch {
-	case config.IsLondon(blockNumber):
+	case config.IsHardFork(blockNumber):
 		signer = NewLondonSigner(config.ChainID)
 	case config.IsBerlin(blockNumber):
 		signer = NewEIP2930Signer(config.ChainID)
@@ -172,6 +172,7 @@ type Signer interface {
 
 type londonSigner struct{ eip2930Signer }
 
+// LondonSigner should be probably renamed to new hard fork name too
 // NewLondonSigner returns a signer that accepts
 // - EIP-1559 dynamic fee transactions
 // - EIP-2930 access list transactions,
