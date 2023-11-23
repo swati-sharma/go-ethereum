@@ -101,7 +101,7 @@ var PrecompiledContractsBerlin = map[common.Address]PrecompiledContract{
 // contracts used in the Archimedes release. Same as Berlin but without sha2, blake2f, ripemd160
 var PrecompiledContractsArchimedes = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{1}): &ecrecover{},
-	common.BytesToAddress([]byte{2}): &sha256hashDisabled{},
+	common.BytesToAddress([]byte{2}): &sha256hash{},
 	common.BytesToAddress([]byte{3}): &ripemd160hashDisabled{},
 	common.BytesToAddress([]byte{4}): &dataCopy{},
 	common.BytesToAddress([]byte{5}): &bigModExp{eip2565: true},
