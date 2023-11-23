@@ -59,7 +59,7 @@ var (
 	berlinInstructionSet           = newBerlinInstructionSet()
 	londonInstructionSet           = newLondonInstructionSet()
 	shanghaiInstructionSet         = newShanghaiInstructionSet()
-	hardForkInstructionSet		   = newHardForkInstructionSet()
+	hardForkInstructionSet         = newHardForkInstructionSet()
 )
 
 // JumpTable contains the EVM opcodes supported at a given fork.
