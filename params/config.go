@@ -279,7 +279,7 @@ var (
 		ArrowGlacierBlock:   nil,
 		ArchimedesBlock:     big.NewInt(2646311),
 		ShanghaiBlock:       nil,
-		HardForkBlock:       nil,
+		KeplerBlock:         nil,
 		Clique: &CliqueConfig{
 			Period: 3,
 			Epoch:  30000,
@@ -318,7 +318,7 @@ var (
 		ArrowGlacierBlock:   nil,
 		ArchimedesBlock:     big.NewInt(0),
 		ShanghaiBlock:       big.NewInt(0),
-		HardForkBlock:       nil,
+		KeplerBlock:         nil,
 		Clique: &CliqueConfig{
 			Period: 3,
 			Epoch:  30000,
@@ -357,7 +357,7 @@ var (
 		ArrowGlacierBlock:   nil,
 		ArchimedesBlock:     big.NewInt(0),
 		ShanghaiBlock:       big.NewInt(0),
-		HardForkBlock:       nil,
+		KeplerBlock:         nil,
 		Clique: &CliqueConfig{
 			Period: 3,
 			Epoch:  30000,
@@ -512,7 +512,7 @@ type ChainConfig struct {
 	ArrowGlacierBlock   *big.Int `json:"arrowGlacierBlock,omitempty"`   // Eip-4345 (bomb delay) switch block (nil = no fork, 0 = already activated)
 	ArchimedesBlock     *big.Int `json:"archimedesBlock,omitempty"`     // Archimedes switch block (nil = no fork, 0 = already on archimedes)
 	ShanghaiBlock       *big.Int `json:"shanghaiBlock,omitempty"`       // Shanghai switch block (nil = no fork, 0 = already on shanghai)
-	HardForkBlock       *big.Int `json:"hardForkBlock,omitempty"`       // HardFork switch block (nil = no fork, 0 = already on hardfork)
+	KeplerBlock         *big.Int `json:"keplerBlock,omitempty"`         // Kepler switch block (nil = no fork, 0 = already on kepler)
 
 	// TerminalTotalDifficulty is the amount of total difficulty reached by
 	// the network that triggers the consensus upgrade.
@@ -638,7 +638,7 @@ func (c *ChainConfig) String() string {
 	default:
 		engine = "unknown"
 	}
-	return fmt.Sprintf("{ChainID: %v Homestead: %v DAO: %v DAOSupport: %v EIP150: %v EIP155: %v EIP158: %v Byzantium: %v Constantinople: %v Petersburg: %v Istanbul: %v, Muir Glacier: %v, Berlin: %v, London: %v, Arrow Glacier: %v, Archimedes: %v, Shanghai: %v, HardFork: %v, Engine: %v, Scroll config: %v}",
+	return fmt.Sprintf("{ChainID: %v Homestead: %v DAO: %v DAOSupport: %v EIP150: %v EIP155: %v EIP158: %v Byzantium: %v Constantinople: %v Petersburg: %v Istanbul: %v, Muir Glacier: %v, Berlin: %v, London: %v, Arrow Glacier: %v, Archimedes: %v, Shanghai: %v, Kepler: %v, Engine: %v, Scroll config: %v}",
 		c.ChainID,
 		c.HomesteadBlock,
 		c.DAOForkBlock,
@@ -656,7 +656,7 @@ func (c *ChainConfig) String() string {
 		c.ArrowGlacierBlock,
 		c.ArchimedesBlock,
 		c.ShanghaiBlock,
-		c.HardForkBlock,
+		c.KeplerBlock,
 		engine,
 		c.Scroll,
 	)
@@ -739,9 +739,9 @@ func (c *ChainConfig) IsShanghai(num *big.Int) bool {
 	return isForked(c.ShanghaiBlock, num)
 }
 
-// IsHardFork returns whether num is either equal to the HardFork fork block or greater.
-func (c *ChainConfig) IsHardFork(num *big.Int) bool {
-	return isForked(c.HardForkBlock, num)
+// IsKepler returns whether num is either equal to the Kepler fork block or greater.
+func (c *ChainConfig) IsKepler(num *big.Int) bool {
+	return isForked(c.KeplerBlock, num)
 }
 
 // IsTerminalPoWBlock returns whether the given block is the last block of PoW stage.
@@ -795,7 +795,7 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 		{name: "arrowGlacierBlock", block: c.ArrowGlacierBlock, optional: true},
 		{name: "archimedesBlock", block: c.ArchimedesBlock, optional: true},
 		{name: "shanghaiBlock", block: c.ShanghaiBlock, optional: true},
-		{name: "hardForkBlock", block: c.HardForkBlock, optional: true},
+		{name: "keplerBlock", block: c.KeplerBlock, optional: true},
 	} {
 		if lastFork.name != "" {
 			// Next one must be higher number
@@ -874,8 +874,8 @@ func (c *ChainConfig) checkCompatible(newcfg *ChainConfig, head *big.Int) *Confi
 	if isForkIncompatible(c.ShanghaiBlock, newcfg.ShanghaiBlock, head) {
 		return newCompatError("Shanghai fork block", c.ShanghaiBlock, newcfg.ShanghaiBlock)
 	}
-	if isForkIncompatible(c.HardForkBlock, newcfg.HardForkBlock, head) {
-		return newCompatError("Hard fork block", c.HardForkBlock, newcfg.HardForkBlock)
+	if isForkIncompatible(c.KeplerBlock, newcfg.KeplerBlock, head) {
+		return newCompatError("Hard fork block", c.KeplerBlock, newcfg.KeplerBlock)
 	}
 	return nil
 }
@@ -945,7 +945,7 @@ type Rules struct {
 	IsHomestead, IsEIP150, IsEIP155, IsEIP158               bool
 	IsByzantium, IsConstantinople, IsPetersburg, IsIstanbul bool
 	IsBerlin, IsLondon, IsArchimedes, IsShanghai            bool
-	IsHardFork                                              bool
+	IsKepler                                              bool
 }
 
 // Rules ensures c's ChainID is not nil.
@@ -968,6 +968,6 @@ func (c *ChainConfig) Rules(num *big.Int) Rules {
 		IsLondon:         c.IsLondon(num),
 		IsArchimedes:     c.IsArchimedes(num),
 		IsShanghai:       c.IsShanghai(num),
-		IsHardFork:       c.IsHardFork(num),
+		IsKepler:       c.IsKepler(num),
 	}
 }
