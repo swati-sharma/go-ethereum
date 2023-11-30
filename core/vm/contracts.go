@@ -140,7 +140,7 @@ var PrecompiledContractsKepler = map[common.Address]PrecompiledContract{
 }
 
 var (
-	PrecompiledAddressesKepler   []common.Address
+	PrecompiledAddressesKepler     []common.Address
 	PrecompiledAddressesArchimedes []common.Address
 	PrecompiledAddressesBerlin     []common.Address
 	PrecompiledAddressesIstanbul   []common.Address
