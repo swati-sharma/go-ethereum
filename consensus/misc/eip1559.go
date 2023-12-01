@@ -47,11 +47,7 @@ func VerifyEip1559Header(config *params.ChainConfig, parent, header *types.Heade
 	var expectedBaseFee *big.Int
 
 	// compatible check with the logic in commitNewWork
-	if config.Clique == nil {
-		expectedBaseFee = CalcBaseFee(config, parent)
-	} else {
-		expectedBaseFee = big.NewInt(0)
-	}
+	expectedBaseFee = CalcBaseFee(config, parent)
 
 	if header.BaseFee.Cmp(expectedBaseFee) != 0 {
 		return fmt.Errorf("invalid baseFee: have %s, want %s, parentBaseFee %s, parentGasUsed %d",
