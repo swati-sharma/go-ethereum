@@ -546,7 +546,6 @@ func (c *L1Config) String() string {
 		c.L1ChainId, c.L1MessageQueueAddress.Hex(), c.NumL1MessagesPerBlock, c.ScrollChainAddress.Hex())
 }
 
-
 func (s ScrollConfig) FeeVaultEnabled() bool {
 	return s.FeeVaultAddress != nil
 }
