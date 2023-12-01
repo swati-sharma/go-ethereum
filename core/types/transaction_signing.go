@@ -40,7 +40,7 @@ type sigCache struct {
 func MakeSigner(config *params.ChainConfig, blockNumber *big.Int) Signer {
 	var signer Signer
 	switch {
-	case config.IsHardFork(blockNumber):
+	case config.IsKepler(blockNumber):
 		signer = NewLondonSigner(config.ChainID)
 	case config.IsBerlin(blockNumber):
 		signer = NewEIP2930Signer(config.ChainID)

@@ -1654,7 +1654,7 @@ func (s *PublicTransactionPoolAPI) GetTransactionReceipt(ctx context.Context, ha
 		"l1Fee":             (*hexutil.Big)(receipt.L1Fee),
 	}
 	// Assign the effective gas price paid
-	if !s.b.ChainConfig().IsHardFork(bigblock) {
+	if !s.b.ChainConfig().IsKepler(bigblock) {
 		fields["effectiveGasPrice"] = hexutil.Uint64(tx.GasPrice().Uint64())
 	} else {
 		header, err := s.b.HeaderByHash(ctx, blockHash)

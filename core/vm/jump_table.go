@@ -59,15 +59,15 @@ var (
 	berlinInstructionSet           = newBerlinInstructionSet()
 	londonInstructionSet           = newLondonInstructionSet()
 	shanghaiInstructionSet         = newShanghaiInstructionSet()
-	hardForkInstructionSet         = newHardForkInstructionSet()
+	keplerInstructionSet           = newkeplerInstructionSet()
 )
 
 // JumpTable contains the EVM opcodes supported at a given fork.
 type JumpTable [256]*operation
 
-// newHardForkInstructionSet returns the frontier, homestead, byzantium,
-// contantinople, istanbul, petersburg, berlin, london, shanghai and hardfork instructions.
-func newHardForkInstructionSet() JumpTable {
+// newkeplerInstructionSet returns the frontier, homestead, byzantium,
+// contantinople, istanbul, petersburg, berlin, london, shanghai and kepler instructions.
+func newkeplerInstructionSet() JumpTable {
 	instructionSet := newShanghaiInstructionSet()
 	enable3198(&instructionSet) // Base fee opcode https://eips.ethereum.org/EIPS/eip-3198
 	return instructionSet

@@ -1225,7 +1225,7 @@ func (pool *TxPool) runReorg(done chan struct{}, reset *txpoolResetRequest, dirt
 	// because of another transaction (e.g. higher gas price).
 	if reset != nil {
 		pool.demoteUnexecutables()
-		if reset.newHead != nil && pool.chainconfig.IsHardFork(new(big.Int).Add(reset.newHead.Number, big.NewInt(1))) {
+		if reset.newHead != nil && pool.chainconfig.IsKepler(new(big.Int).Add(reset.newHead.Number, big.NewInt(1))) {
 			pendingBaseFee := misc.CalcBaseFee(pool.chainconfig, reset.newHead)
 			pool.priced.SetBaseFee(pendingBaseFee)
 		}
@@ -1349,8 +1349,8 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 	// Update all fork indicator by next pending block number.
 	next := new(big.Int).Add(newHead.Number, big.NewInt(1))
 	pool.istanbul = pool.chainconfig.IsIstanbul(next)
-	pool.eip1559 = pool.chainconfig.IsHardFork(next)
-	pool.eip2718 = pool.chainconfig.IsHardFork(next)
+	pool.eip1559 = pool.chainconfig.IsKepler(next)
+	pool.eip2718 = pool.chainconfig.IsKepler(next)
 	pool.shanghai = pool.chainconfig.IsShanghai(next)
 }
 
