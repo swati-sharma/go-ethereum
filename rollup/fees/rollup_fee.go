@@ -211,12 +211,12 @@ func VerifyFee(signer types.Signer, tx *types.Transaction, state StateDB) error 
 	cost := tx.Value()
 	cost = cost.Add(cost, l2Fee)
 	if balance.Cmp(cost) < 0 {
-		// return errors.New("invalid transaction: insufficient funds for gas * price + value")
+		return errors.New("invalid transaction: insufficient funds for gas * price + value")
 	}
 
 	cost = cost.Add(cost, l1DataFee)
 	if balance.Cmp(cost) < 0 {
-		// return errors.New("invalid transaction: insufficient funds for l1fee + gas * price + value")
+		return errors.New("invalid transaction: insufficient funds for l1fee + gas * price + value")
 	}
 
 	// TODO: check GasPrice is in an expected range

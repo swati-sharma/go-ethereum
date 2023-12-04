@@ -70,6 +70,7 @@ func init() {
 	eip1559NoL1DataFeeConfig = &cpy2
 	eip1559NoL1DataFeeConfig.BerlinBlock = common.Big0
 	eip1559NoL1DataFeeConfig.LondonBlock = common.Big0
+	eip1559NoL1DataFeeConfig.KeplerBlock = common.Big0
 }
 
 type testBlockChain struct {
@@ -399,7 +400,7 @@ func TestTransactionNegativeValue(t *testing.T) {
 func TestTransactionTipAboveFeeCap(t *testing.T) {
 	t.Parallel()
 
-	pool, key := setupTxPoolWithConfig(eip1559Config)
+	pool, key := setupTxPoolWithConfig(eip1559NoL1DataFeeConfig)
 	defer pool.Stop()
 
 	tx := dynamicFeeTx(0, 100, big.NewInt(1), big.NewInt(2), key)
@@ -412,7 +413,7 @@ func TestTransactionTipAboveFeeCap(t *testing.T) {
 func TestTransactionVeryHighValues(t *testing.T) {
 	t.Parallel()
 
-	pool, key := setupTxPoolWithConfig(eip1559Config)
+	pool, key := setupTxPoolWithConfig(eip1559NoL1DataFeeConfig)
 	defer pool.Stop()
 
 	veryBigNumber := big.NewInt(1)
@@ -1464,7 +1465,7 @@ func TestTransactionPoolRepricingDynamicFee(t *testing.T) {
 	t.Parallel()
 
 	// Create the pool to test the pricing enforcement with
-	pool, _ := setupTxPoolWithConfig(eip1559Config)
+	pool, _ := setupTxPoolWithConfig(eip1559NoL1DataFeeConfig)
 	defer pool.Stop()
 
 	// Keep track of transaction events to ensure all executables get announced
@@ -1835,7 +1836,7 @@ func TestTransactionPoolStableUnderpricing(t *testing.T) {
 func TestTransactionPoolUnderpricingDynamicFee(t *testing.T) {
 	t.Parallel()
 
-	pool, _ := setupTxPoolWithConfig(eip1559Config)
+	pool, _ := setupTxPoolWithConfig(eip1559NoL1DataFeeConfig)
 	defer pool.Stop()
 
 	pool.config.GlobalSlots = 2
@@ -1942,7 +1943,7 @@ func TestTransactionPoolUnderpricingDynamicFee(t *testing.T) {
 func TestDualHeapEviction(t *testing.T) {
 	t.Parallel()
 
-	pool, _ := setupTxPoolWithConfig(eip1559Config)
+	pool, _ := setupTxPoolWithConfig(eip1559NoL1DataFeeConfig)
 	defer pool.Stop()
 
 	pool.config.GlobalSlots = 10
@@ -2145,7 +2146,7 @@ func TestTransactionReplacementDynamicFee(t *testing.T) {
 	t.Parallel()
 
 	// Create the pool to test the pricing enforcement with
-	pool, key := setupTxPoolWithConfig(eip1559Config)
+	pool, key := setupTxPoolWithConfig(eip1559NoL1DataFeeConfig)
 	defer pool.Stop()
 	testAddBalance(pool, crypto.PubkeyToAddress(key.PublicKey), big.NewInt(1000000000))
 
