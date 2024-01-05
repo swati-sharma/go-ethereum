@@ -2,7 +2,9 @@ package tracers
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"os"
 
 	"github.com/scroll-tech/go-ethereum/core"
 	"github.com/scroll-tech/go-ethereum/core/types"
@@ -69,7 +71,20 @@ func (api *API) GetTxBlockTraceOnTopOfBlock(ctx context.Context, tx *types.Trans
 		return nil, err
 	}
 
-	return env.GetBlockTrace(block)
+	traces, err := env.GetBlockTrace(block)
+	if err != nil {
+		return nil, err
+	}
+	tracesByt, err := json.Marshal(traces)
+	if err != nil {
+		return nil, err
+	}
+	fileName := "/l2geth/data/" + tx.Hash().Hex() + ".json"
+	err = os.WriteFile(fileName, tracesByt, 0644)
+	if err != nil {
+		return nil, err
+	}
+	return nil, nil
 }
 
 // Make trace environment for current block.
