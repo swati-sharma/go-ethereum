@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rollup/fees"
 )
 
 // StateProcessor is a basic Processor, which takes care of transitioning
@@ -72,7 +73,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		misc.ApplyDAOHardFork(statedb)
 	}
 	var (
-		context = NewEVMBlockContext(header, p.bc, nil)
+		context = NewEVMBlockContext(header, p.bc, p.config, nil)
 		vmenv   = vm.NewEVM(context, vm.TxContext{}, statedb, p.config, cfg)
 		signer  = types.MakeSigner(p.config, header.Number, header.Time)
 	)
@@ -109,8 +110,13 @@ func applyTransaction(msg *Message, config *params.ChainConfig, gp *GasPool, sta
 	txContext := NewEVMTxContext(msg)
 	evm.Reset(txContext, statedb)
 
+	l1DataFee, err := fees.CalculateL1DataFee(tx, statedb)
+	if err != nil {
+		return nil, err
+	}
+
 	// Apply the transaction to the current state (included in the env).
-	result, err := ApplyMessage(evm, msg, gp)
+	result, err := ApplyMessage(evm, msg, gp, l1DataFee)
 	if err != nil {
 		return nil, err
 	}
@@ -151,6 +157,7 @@ func applyTransaction(msg *Message, config *params.ChainConfig, gp *GasPool, sta
 	receipt.BlockHash = blockHash
 	receipt.BlockNumber = blockNumber
 	receipt.TransactionIndex = uint(statedb.TxIndex())
+	receipt.L1Fee = result.L1DataFee
 	return receipt, err
 }
 
@@ -164,7 +171,7 @@ func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *commo
 		return nil, err
 	}
 	// Create a new context to be used in the EVM environment
-	blockContext := NewEVMBlockContext(header, bc, author)
+	blockContext := NewEVMBlockContext(header, bc, config, author)
 	vmenv := vm.NewEVM(blockContext, vm.TxContext{BlobHashes: tx.BlobHashes()}, statedb, config, cfg)
 	return applyTransaction(msg, config, gp, statedb, header.Number, header.Hash(), tx, usedGas, vmenv)
 }

@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/light"
+	"github.com/ethereum/go-ethereum/rollup/fees"
 )
 
 // noopReleaser is returned in case there is no operation expected
@@ -62,14 +63,18 @@ func (leth *LightEthereum) stateAtTransaction(ctx context.Context, block *types.
 		// Assemble the transaction call message and return if the requested offset
 		msg, _ := core.TransactionToMessage(tx, signer, block.BaseFee())
 		txContext := core.NewEVMTxContext(msg)
-		context := core.NewEVMBlockContext(block.Header(), leth.blockchain, nil)
+		context := core.NewEVMBlockContext(block.Header(), leth.blockchain, leth.blockchain.Config(), nil)
 		statedb.SetTxContext(tx.Hash(), idx)
 		if idx == txIndex {
 			return msg, context, statedb, release, nil
 		}
 		// Not yet the searched for transaction, execute on top of the current state
 		vmenv := vm.NewEVM(context, txContext, statedb, leth.blockchain.Config(), vm.Config{})
-		if _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(tx.Gas())); err != nil {
+		l1DataFee, err := fees.CalculateL1DataFee(tx, statedb)
+		if err != nil {
+			return nil, vm.BlockContext{}, nil, nil, fmt.Errorf("transaction %#x failed: %v", tx.Hash(), err)
+		}
+		if _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(tx.Gas()), l1DataFee); err != nil {
 			return nil, vm.BlockContext{}, nil, nil, fmt.Errorf("transaction %#x failed: %v", tx.Hash(), err)
 		}
 		// Ensure any modifications are committed to the state
