@@ -143,6 +143,7 @@ func CreateTraceEnv(chainConfig *params.ChainConfig, chainContext core.ChainCont
 		&vm.LogConfig{
 			EnableMemory:     false,
 			EnableReturnData: true,
+			DisableStack:     true,
 		},
 		core.NewEVMBlockContext(block.Header(), chainContext, chainConfig, nil),
 		*startL1QueueIndex,
