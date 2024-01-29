@@ -5,8 +5,9 @@ import (
 	"os"
 	"testing"
 
-	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/scroll-tech/go-ethereum/common"
 )
 
 func TestNewBatchHeader(t *testing.T) {
