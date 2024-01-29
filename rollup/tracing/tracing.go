@@ -487,11 +487,6 @@ func (env *TraceEnv) getTxResult(state *state.StateDB, index int, block *types.B
 func (env *TraceEnv) fillBlockTrace(block *types.Block) (*types.BlockTrace, error) {
 	statedb := env.state
 
-	txs := make([]*types.TransactionData, block.Transactions().Len())
-	for i, tx := range block.Transactions() {
-		txs[i] = types.NewTransactionData(tx, block.NumberU64(), env.chainConfig)
-	}
-
 	intrinsicStorageProofs := map[common.Address][]common.Hash{
 		rcfg.L2MessageQueueAddress: {rcfg.WithdrawTrieRootSlot},
 		rcfg.L1GasPriceOracleAddress: {
@@ -546,7 +541,7 @@ func (env *TraceEnv) fillBlockTrace(block *types.Block) (*types.BlockTrace, erro
 		StorageTrace:      env.StorageTrace,
 		ExecutionResults:  env.ExecutionResults,
 		TxStorageTraces:   env.TxStorageTraces,
-		Transactions:      txs,
+		Transactions:      block.Transactions(),
 		StartL1QueueIndex: env.StartL1QueueIndex,
 	}
 

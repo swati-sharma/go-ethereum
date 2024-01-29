@@ -1,4 +1,4 @@
-package rollup_sync_service
+package types
 
 import (
 	"encoding/binary"
@@ -10,7 +10,7 @@ import (
 	"github.com/scroll-tech/go-ethereum/crypto"
 )
 
-const batchHeaderVersion = 0
+const BatchHeaderVersion = 0
 
 // BatchHeader contains batch header info to be committed.
 type BatchHeader struct {
@@ -50,13 +50,13 @@ func NewBatchHeader(version uint8, batchIndex, totalL1MessagePoppedBefore uint64
 		// build skip bitmap
 		for blockID, block := range chunk.Blocks {
 			for _, tx := range block.Transactions {
-				if tx.Type != types.L1MessageTxType {
+				if tx.Type() != types.L1MessageTxType {
 					continue
 				}
-				currentIndex := tx.Nonce
+				currentIndex := tx.AsL1MessageTx().QueueIndex
 
 				if currentIndex < nextIndex {
-					return nil, fmt.Errorf("unexpected batch payload, expected queue index: %d, got: %d. Batch index: %d, chunk index in batch: %d, block index in chunk: %d, block hash: %v, transaction hash: %v", nextIndex, currentIndex, batchIndex, chunkID, blockID, block.Header.Hash(), tx.TxHash)
+					return nil, fmt.Errorf("unexpected batch payload, expected queue index: %d, got: %d. Batch index: %d, chunk index in batch: %d, block index in chunk: %d, block hash: %v, transaction hash: %v", nextIndex, currentIndex, batchIndex, chunkID, blockID, block.Header.Hash().String(), tx.Hash().String())
 				}
 
 				// mark skipped messages
@@ -120,4 +120,21 @@ func (b *BatchHeader) Encode() []byte {
 // Hash calculates the hash of the batch header.
 func (b *BatchHeader) Hash() common.Hash {
 	return crypto.Keccak256Hash(b.Encode())
+}
+
+// DecodeBatchHeader attempts to decode the given byte slice into a BatchHeader.
+func DecodeBatchHeader(data []byte) (*BatchHeader, error) {
+	if len(data) < 89 {
+		return nil, fmt.Errorf("insufficient data for BatchHeader")
+	}
+	b := &BatchHeader{
+		version:                data[0],
+		batchIndex:             binary.BigEndian.Uint64(data[1:9]),
+		l1MessagePopped:        binary.BigEndian.Uint64(data[9:17]),
+		totalL1MessagePopped:   binary.BigEndian.Uint64(data[17:25]),
+		dataHash:               common.BytesToHash(data[25:57]),
+		parentBatchHash:        common.BytesToHash(data[57:89]),
+		skippedL1MessageBitmap: data[89:],
+	}
+	return b, nil
 }

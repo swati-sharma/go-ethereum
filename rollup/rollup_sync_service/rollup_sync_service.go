@@ -20,6 +20,7 @@ import (
 
 	"github.com/scroll-tech/go-ethereum/rollup/rcfg"
 	"github.com/scroll-tech/go-ethereum/rollup/sync_service"
+	rollupTypes "github.com/scroll-tech/go-ethereum/rollup/types"
 	"github.com/scroll-tech/go-ethereum/rollup/withdrawtrie"
 )
 
@@ -247,7 +248,7 @@ func (s *RollupSyncService) parseAndUpdateRollupEventLogs(logs []types.Log, endB
 	return nil
 }
 
-func (s *RollupSyncService) getLocalInfoForBatch(batchIndex uint64) (*rawdb.FinalizedBatchMeta, []*Chunk, error) {
+func (s *RollupSyncService) getLocalInfoForBatch(batchIndex uint64) (*rawdb.FinalizedBatchMeta, []*rollupTypes.Chunk, error) {
 	chunkBlockRanges := rawdb.ReadBatchChunkRanges(s.db, batchIndex)
 	if len(chunkBlockRanges) == 0 {
 		return nil, nil, fmt.Errorf("failed to get batch chunk ranges, empty chunk block ranges")
@@ -275,23 +276,22 @@ func (s *RollupSyncService) getLocalInfoForBatch(batchIndex uint64) (*rawdb.Fina
 		return nil, nil, fmt.Errorf("local node is not synced up to the required block height: %v, local synced block height: %v", endBlockNumber, localSyncedBlockHeight)
 	}
 
-	chunks := make([]*Chunk, len(chunkBlockRanges))
+	chunks := make([]*rollupTypes.Chunk, len(chunkBlockRanges))
 	for i, cr := range chunkBlockRanges {
-		chunks[i] = &Chunk{Blocks: make([]*WrappedBlock, cr.EndBlockNumber-cr.StartBlockNumber+1)}
+		chunks[i] = &rollupTypes.Chunk{Blocks: make([]*rollupTypes.WrappedBlock, cr.EndBlockNumber-cr.StartBlockNumber+1)}
 		for j := cr.StartBlockNumber; j <= cr.EndBlockNumber; j++ {
 			block := s.bc.GetBlockByNumber(j)
 			if block == nil {
 				return nil, nil, fmt.Errorf("failed to get block by number: %v", i)
 			}
-			txData := txsToTxsData(block.Transactions())
 			state, err := s.bc.StateAt(block.Root())
 			if err != nil {
 				return nil, nil, fmt.Errorf("failed to get block state, block: %v, err: %w", block.Hash().Hex(), err)
 			}
 			withdrawRoot := withdrawtrie.ReadWTRSlot(rcfg.L2MessageQueueAddress, state)
-			chunks[i].Blocks[j-cr.StartBlockNumber] = &WrappedBlock{
+			chunks[i].Blocks[j-cr.StartBlockNumber] = &rollupTypes.WrappedBlock{
 				Header:       block.Header(),
-				Transactions: txData,
+				Transactions: block.Transactions(),
 				WithdrawRoot: withdrawRoot,
 			}
 		}
@@ -365,17 +365,17 @@ func (s *RollupSyncService) decodeChunkBlockRanges(txData []byte) ([]*rawdb.Chun
 		return nil, fmt.Errorf("failed to decode calldata into commitBatch args, values: %+v, err: %w", values, err)
 	}
 
-	if args.Version != batchHeaderVersion {
-		return nil, fmt.Errorf("unexpected batch version, expected: %v, got: %v", batchHeaderVersion, args.Version)
+	if args.Version != rollupTypes.BatchHeaderVersion {
+		return nil, fmt.Errorf("unexpected batch version, expected: %v, got: %v", rollupTypes.BatchHeaderVersion, args.Version)
 	}
 
-	return DecodeChunkBlockRanges(args.Chunks)
+	return rollupTypes.DecodeChunkBlockRanges(args.Chunks)
 }
 
 // validateBatch verifies the consistency between the L1 contract and L2 node data.
 // The function will terminate the node and exit if any consistency check fails.
 // It returns the number of the end block, a finalized batch meta data, and an error if any.
-func validateBatch(event *L1FinalizeBatchEvent, parentBatchMeta *rawdb.FinalizedBatchMeta, chunks []*Chunk) (uint64, *rawdb.FinalizedBatchMeta, error) {
+func validateBatch(event *L1FinalizeBatchEvent, parentBatchMeta *rawdb.FinalizedBatchMeta, chunks []*rollupTypes.Chunk) (uint64, *rawdb.FinalizedBatchMeta, error) {
 	if len(chunks) == 0 {
 		return 0, nil, fmt.Errorf("invalid argument: length of chunks is 0, batch index: %v", event.BatchIndex.Uint64())
 	}
@@ -407,7 +407,7 @@ func validateBatch(event *L1FinalizeBatchEvent, parentBatchMeta *rawdb.Finalized
 	}
 
 	// Note: All params for NewBatchHeader are calculated locally based on the block data.
-	batchHeader, err := NewBatchHeader(batchHeaderVersion, event.BatchIndex.Uint64(), parentBatchMeta.TotalL1MessagePopped, parentBatchMeta.BatchHash, chunks)
+	batchHeader, err := rollupTypes.NewBatchHeader(rollupTypes.BatchHeaderVersion, event.BatchIndex.Uint64(), parentBatchMeta.TotalL1MessagePopped, parentBatchMeta.BatchHash, chunks)
 	if err != nil {
 		return 0, nil, fmt.Errorf("failed to construct batch header, batch index: %v, err: %w", event.BatchIndex.Uint64(), err)
 	}

@@ -18,6 +18,7 @@ import (
 	"github.com/scroll-tech/go-ethereum/core/types"
 	"github.com/scroll-tech/go-ethereum/ethdb/memorydb"
 	"github.com/scroll-tech/go-ethereum/params"
+	rollupTypes "github.com/scroll-tech/go-ethereum/rollup/types"
 )
 
 func TestRollupSyncServiceStartAndStop(t *testing.T) {
@@ -51,7 +52,7 @@ func TestDecodeChunkRanges(t *testing.T) {
 		scrollChainABI: scrollChainABI,
 	}
 
-	data, err := os.ReadFile("./testdata/commit_batch_transaction.json")
+	data, err := os.ReadFile("../testdata/commit_batch_transaction.json")
 	require.NoError(t, err, "Failed to read json file")
 
 	type transactionJson struct {
@@ -104,7 +105,7 @@ func TestGetChunkRanges(t *testing.T) {
 	}
 	db := rawdb.NewDatabase(memorydb.New())
 
-	rlpData, err := os.ReadFile("./testdata/commit_batch_tx.rlp")
+	rlpData, err := os.ReadFile("../testdata/commit_batch_tx.rlp")
 	if err != nil {
 		t.Fatalf("Failed to read RLP data: %v", err)
 	}
@@ -141,44 +142,44 @@ func TestGetChunkRanges(t *testing.T) {
 }
 
 func TestValidateBatch(t *testing.T) {
-	templateBlockTrace1, err := os.ReadFile("./testdata/blockTrace_02.json")
+	templateBlockTrace1, err := os.ReadFile("../testdata/blockTrace_02.json")
 	require.NoError(t, err)
-	wrappedBlock1 := &WrappedBlock{}
+	wrappedBlock1 := &rollupTypes.WrappedBlock{}
 	err = json.Unmarshal(templateBlockTrace1, wrappedBlock1)
 	require.NoError(t, err)
-	chunk1 := &Chunk{Blocks: []*WrappedBlock{wrappedBlock1}}
+	chunk1 := &rollupTypes.Chunk{Blocks: []*rollupTypes.WrappedBlock{wrappedBlock1}}
 
-	templateBlockTrace2, err := os.ReadFile("./testdata/blockTrace_03.json")
+	templateBlockTrace2, err := os.ReadFile("../testdata/blockTrace_03.json")
 	require.NoError(t, err)
-	wrappedBlock2 := &WrappedBlock{}
+	wrappedBlock2 := &rollupTypes.WrappedBlock{}
 	err = json.Unmarshal(templateBlockTrace2, wrappedBlock2)
 	require.NoError(t, err)
-	chunk2 := &Chunk{Blocks: []*WrappedBlock{wrappedBlock2}}
+	chunk2 := &rollupTypes.Chunk{Blocks: []*rollupTypes.WrappedBlock{wrappedBlock2}}
 
-	templateBlockTrace3, err := os.ReadFile("./testdata/blockTrace_04.json")
+	templateBlockTrace3, err := os.ReadFile("../testdata/blockTrace_04.json")
 	require.NoError(t, err)
-	wrappedBlock3 := &WrappedBlock{}
+	wrappedBlock3 := &rollupTypes.WrappedBlock{}
 	err = json.Unmarshal(templateBlockTrace3, wrappedBlock3)
 	require.NoError(t, err)
-	chunk3 := &Chunk{Blocks: []*WrappedBlock{wrappedBlock3}}
+	chunk3 := &rollupTypes.Chunk{Blocks: []*rollupTypes.WrappedBlock{wrappedBlock3}}
 
 	parentBatchMeta1 := &rawdb.FinalizedBatchMeta{}
 	event1 := &L1FinalizeBatchEvent{
 		BatchIndex:   big.NewInt(0),
-		BatchHash:    common.HexToHash("0xd0f52bc254646e639bf24cc34606319a111975b2fdc431b1381eb6199bc09790"),
+		BatchHash:    common.HexToHash("0xe9d2e6e14f40ac7fa2590be11399435ac066e96f1202ad783186140b29c931a4"),
 		StateRoot:    chunk3.Blocks[len(chunk3.Blocks)-1].Header.Root,
 		WithdrawRoot: chunk3.Blocks[len(chunk3.Blocks)-1].WithdrawRoot,
 	}
-	endBlock1, finalizedBatchMeta1, err := validateBatch(event1, parentBatchMeta1, []*Chunk{chunk1, chunk2, chunk3})
+	endBlock1, finalizedBatchMeta1, err := validateBatch(event1, parentBatchMeta1, []*rollupTypes.Chunk{chunk1, chunk2, chunk3})
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(13), endBlock1)
 
-	templateBlockTrace4, err := os.ReadFile("./testdata/blockTrace_05.json")
+	templateBlockTrace4, err := os.ReadFile("../testdata/blockTrace_05.json")
 	require.NoError(t, err)
-	wrappedBlock4 := &WrappedBlock{}
+	wrappedBlock4 := &rollupTypes.WrappedBlock{}
 	err = json.Unmarshal(templateBlockTrace4, wrappedBlock4)
 	require.NoError(t, err)
-	chunk4 := &Chunk{Blocks: []*WrappedBlock{wrappedBlock4}}
+	chunk4 := &rollupTypes.Chunk{Blocks: []*rollupTypes.WrappedBlock{wrappedBlock4}}
 
 	parentBatchMeta2 := &rawdb.FinalizedBatchMeta{
 		BatchHash:            event1.BatchHash,
@@ -189,11 +190,11 @@ func TestValidateBatch(t *testing.T) {
 	assert.Equal(t, parentBatchMeta2, finalizedBatchMeta1)
 	event2 := &L1FinalizeBatchEvent{
 		BatchIndex:   big.NewInt(1),
-		BatchHash:    common.HexToHash("0xfb77bf8f3bf449126ebbf403fdccfcf78636e34d72d62eed8da0e8c9fd38fa63"),
+		BatchHash:    common.HexToHash("0xea53be01a81977d686c8238063dcc765be23b4bdb248587fc452117ef262b823"),
 		StateRoot:    chunk4.Blocks[len(chunk4.Blocks)-1].Header.Root,
 		WithdrawRoot: chunk4.Blocks[len(chunk4.Blocks)-1].WithdrawRoot,
 	}
-	endBlock2, finalizedBatchMeta2, err := validateBatch(event2, parentBatchMeta2, []*Chunk{chunk4})
+	endBlock2, finalizedBatchMeta2, err := validateBatch(event2, parentBatchMeta2, []*rollupTypes.Chunk{chunk4})
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(17), endBlock2)
 
