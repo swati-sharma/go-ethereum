@@ -104,6 +104,26 @@ func NewBatchHeader(version uint8, batchIndex, totalL1MessagePoppedBefore uint64
 	}, nil
 }
 
+// Version returns the version of the BatchHeader.
+func (b *BatchHeader) Version() uint8 {
+	return b.version
+}
+
+// BatchIndex returns the batch index of the BatchHeader.
+func (b *BatchHeader) BatchIndex() uint64 {
+	return b.batchIndex
+}
+
+// TotalL1MessagePopped returns the total number of L1 messages popped in the BatchHeader.
+func (b *BatchHeader) TotalL1MessagePopped() uint64 {
+	return b.totalL1MessagePopped
+}
+
+// SkippedL1MessageBitmap returns the skipped L1 message bitmap in the BatchHeader.
+func (b *BatchHeader) SkippedL1MessageBitmap() []byte {
+	return b.skippedL1MessageBitmap
+}
+
 // Encode encodes the BatchHeader into RollupV2 BatchHeaderV0Codec Encoding.
 func (b *BatchHeader) Encode() []byte {
 	batchBytes := make([]byte, 89+len(b.skippedL1MessageBitmap))
@@ -137,4 +157,15 @@ func DecodeBatchHeader(data []byte) (*BatchHeader, error) {
 		skippedL1MessageBitmap: data[89:],
 	}
 	return b, nil
+}
+
+// BatchMeta contains metadata of a batch.
+// Used in rollup-relayer's RDS update.
+type BatchMeta struct {
+	StartChunkIndex           uint64
+	StartChunkHash            string
+	EndChunkIndex             uint64
+	EndChunkHash              string
+	TotalL1CommitGas          uint64
+	TotalL1CommitCalldataSize uint32
 }
