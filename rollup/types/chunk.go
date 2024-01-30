@@ -64,7 +64,7 @@ func (c *Chunk) Encode(totalL1MessagePoppedBefore uint64) ([]byte, error) {
 			}
 			rlp, err := tx.MarshalBinary()
 			if err != nil {
-				return nil, fmt.Errorf("failed to marshal binary of the tx: %+v, err: %w", tx, err)
+				return nil, fmt.Errorf("failed to marshal binary, err: %w", err)
 			}
 			var txLen [4]byte
 			binary.BigEndian.PutUint32(txLen[:], uint32(len(rlp)))

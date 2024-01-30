@@ -109,11 +109,6 @@ func (b *BatchHeader) Version() uint8 {
 	return b.version
 }
 
-// BatchIndex returns the batch index of the BatchHeader.
-func (b *BatchHeader) BatchIndex() uint64 {
-	return b.batchIndex
-}
-
 // TotalL1MessagePopped returns the total number of L1 messages popped in the BatchHeader.
 func (b *BatchHeader) TotalL1MessagePopped() uint64 {
 	return b.totalL1MessagePopped
@@ -160,7 +155,7 @@ func DecodeBatchHeader(data []byte) (*BatchHeader, error) {
 }
 
 // BatchMeta contains metadata of a batch.
-// Used in rollup-relayer's RDS update.
+// Used in rollup-relayer's DB update.
 type BatchMeta struct {
 	StartChunkIndex           uint64
 	StartChunkHash            string

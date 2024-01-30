@@ -11,7 +11,6 @@ import (
 	"github.com/scroll-tech/go-ethereum/log"
 )
 
-// CalldataNonZeroByteGas is the gas consumption per non zero byte in calldata.
 const CalldataNonZeroByteGas = 16
 const blockContextByteSize = 60
 
