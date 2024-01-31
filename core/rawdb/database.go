@@ -26,13 +26,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/ethdb/leveldb"
-	"github.com/ethereum/go-ethereum/ethdb/memorydb"
-	"github.com/ethereum/go-ethereum/ethdb/pebble"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/olekukonko/tablewriter"
+	"github.com/scroll-tech/go-ethereum/common"
+	"github.com/scroll-tech/go-ethereum/ethdb"
+	"github.com/scroll-tech/go-ethereum/ethdb/leveldb"
+	"github.com/scroll-tech/go-ethereum/ethdb/memorydb"
+	"github.com/scroll-tech/go-ethereum/ethdb/pebble"
+	"github.com/scroll-tech/go-ethereum/log"
 )
 
 // freezerdb is a database wrapper that enables freezer data retrievals.
