@@ -1381,8 +1381,27 @@ func (pool *TxPool) promoteExecutables(accounts []common.Address) []*types.Trans
 			pool.all.Remove(hash)
 		}
 		log.Trace("Removed old queued transactions", "count", len(forwards))
+
 		// Drop all transactions that are too costly (low balance or out of gas)
-		drops, _ := list.Filter(pool.currentState.GetBalance(addr), pool.currentMaxGas)
+		costLimit := pool.currentState.GetBalance(addr)
+		drops, _ := list.FilterF(func(tx *types.Transaction) bool {
+			if tx.Gas() > pool.currentMaxGas || tx.Cost().Cmp(costLimit) > 0 {
+				return true
+			}
+
+			if pool.chainconfig.Scroll.FeeVaultEnabled() {
+				// recheck L1 data fee, as the oracle price may have changed
+				l1DataFee, err := fees.CalculateL1DataFee(tx, pool.currentState)
+				if err != nil {
+					log.Trace("Failed to calculate L1 data fee", "err", err)
+					return false
+				}
+				return costLimit.Cmp(new(big.Int).Add(tx.Cost(), l1DataFee)) < 0
+			}
+
+			return false
+		})
+
 		for _, tx := range drops {
 			hash := tx.Hash()
 			pool.all.Remove(hash)
