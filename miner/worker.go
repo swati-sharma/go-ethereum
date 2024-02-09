@@ -1329,6 +1329,12 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 			parentGasLimit := parent.GasLimit() * params.ElasticityMultiplier
 			header.GasLimit = core.CalcGasLimit(parentGasLimit, w.config.GasCeil)
 		}
+	} else if w.chainConfig.IsLondon(header.Number) {
+		header.BaseFee = nil
+		if !w.chainConfig.IsLondon(parent.Number()) {
+			parentGasLimit := parent.GasLimit() * params.ElasticityMultiplier
+			header.GasLimit = core.CalcGasLimit(parentGasLimit, w.config.GasCeil)
+		}
 	}
 	// Only set the coinbase if our consensus engine is running (avoid spurious block rewards)
 	if w.isRunning() {

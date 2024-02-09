@@ -312,11 +312,13 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 	if g.Difficulty == nil {
 		head.Difficulty = params.GenesisDifficulty
 	}
-	if g.Config != nil && g.Config.IsBanach(common.Big0) {
+	if g.Config != nil && g.Config.IsLondon(common.Big0) {
 		if g.BaseFee != nil {
 			head.BaseFee = g.BaseFee
-		} else {
+		} else if g.Config.IsBanach(common.Big0) {
 			head.BaseFee = new(big.Int).SetUint64(params.InitialBaseFee)
+		} else {
+			head.BaseFee = nil
 		}
 	}
 	statedb.Commit(false)

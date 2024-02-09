@@ -32,19 +32,30 @@ import (
 func VerifyEip1559Header(config *params.ChainConfig, parent, header *types.Header) error {
 	// Verify that the gas limit remains within allowed bounds
 	parentGasLimit := parent.GasLimit
-	if !config.IsBanach(parent.Number) {
+	if !config.IsLondon(parent.Number) {
 		parentGasLimit = parent.GasLimit * params.ElasticityMultiplier
 	}
 	if err := VerifyGaslimit(parentGasLimit, header.GasLimit); err != nil {
 		return err
 	}
 	// Verify the header is not malformed
-	if header.BaseFee == nil {
+	if header.BaseFee == nil && config.IsBanach(header.Number) {
 		return fmt.Errorf("header is missing baseFee")
+	}
+	// Now BaseFee can be nil, because !config.IsBanach(header.Number)
+	if header.BaseFee == nil {
+		return nil
 	}
 	// Verify the baseFee is correct based on the parent header.
 
-	expectedBaseFee := CalcBaseFee(config, parent)
+	var expectedBaseFee *big.Int
+
+	// compatible check with the logic in commitNewWork
+	if config.Clique == nil || config.IsBanach(header.Number) {
+		expectedBaseFee = CalcBaseFee(config, parent)
+	} else {
+		expectedBaseFee = big.NewInt(0)
+	}
 
 	if header.BaseFee.Cmp(expectedBaseFee) != 0 {
 		return fmt.Errorf("invalid baseFee: have %s, want %s, parentBaseFee %s, parentGasUsed %d",
@@ -56,7 +67,7 @@ func VerifyEip1559Header(config *params.ChainConfig, parent, header *types.Heade
 // CalcBaseFee calculates the basefee of the header.
 func CalcBaseFee(config *params.ChainConfig, parent *types.Header) *big.Int {
 	// If the current block is the first EIP-1559 block, return the InitialBaseFee.
-	if !config.IsBanach(parent.Number) {
+	if !config.IsLondon(parent.Number) {
 		return new(big.Int).SetUint64(params.InitialBaseFee)
 	}
 
@@ -65,6 +76,9 @@ func CalcBaseFee(config *params.ChainConfig, parent *types.Header) *big.Int {
 		parentGasTargetBig       = new(big.Int).SetUint64(parentGasTarget)
 		baseFeeChangeDenominator = new(big.Int).SetUint64(params.BaseFeeChangeDenominator)
 	)
+	if !config.IsBanach(parent.Number) {
+		return nil
+	}
 	// If the parent gasUsed is the same as the target, the baseFee remains unchanged.
 	if parent.GasUsed == parentGasTarget {
 		return new(big.Int).Set(parent.BaseFee)

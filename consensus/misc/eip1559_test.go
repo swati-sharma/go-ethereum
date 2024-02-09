@@ -53,11 +53,13 @@ func copyConfig(original *params.ChainConfig) *params.ChainConfig {
 func config() *params.ChainConfig {
 	config := copyConfig(params.TestChainConfig)
 	config.LondonBlock = big.NewInt(5)
+	config.BanachBlock = big.NewInt(5)
 	return config
 }
 
 // TestBlockGasLimits tests the gasLimit checks for blocks both across
 // the EIP-1559 boundary and post-1559 blocks
+// TODO: update this test
 func TestBlockGasLimits(t *testing.T) {
 	initial := new(big.Int).SetUint64(params.InitialBaseFee)
 
