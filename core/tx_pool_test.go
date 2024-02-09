@@ -64,13 +64,13 @@ func init() {
 	eip1559Config = &cpy1
 	eip1559Config.BerlinBlock = common.Big0
 	eip1559Config.LondonBlock = common.Big0
-	eip1559Config.KeplerBlock = common.Big0
+	eip1559Config.BanachBlock = common.Big0
 
 	cpy2 := *params.TestNoL1DataFeeChainConfig
 	eip1559NoL1DataFeeConfig = &cpy2
 	eip1559NoL1DataFeeConfig.BerlinBlock = common.Big0
 	eip1559NoL1DataFeeConfig.LondonBlock = common.Big0
-	eip1559NoL1DataFeeConfig.KeplerBlock = common.Big0
+	eip1559NoL1DataFeeConfig.BanachBlock = common.Big0
 }
 
 type testBlockChain struct {
