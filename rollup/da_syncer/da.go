@@ -1,5 +1,7 @@
 package da_syncer
 
+import "github.com/scroll-tech/go-ethereum/core/types"
+
 type DAType int
 
 const (
@@ -19,12 +21,12 @@ type DAEntry struct {
 	// Chunks contains chunk of a batch
 	Chunks Chunks
 	// L1Txs contains l1txs of a batch
-	L1Txs L1Txs
+	L1Txs []*types.L1MessageTx
 }
 
 type DA []*DAEntry
 
-func NewCommitBatchDA(batchIndex uint64, chunks Chunks, l1txs L1Txs) *DAEntry {
+func NewCommitBatchDA(batchIndex uint64, chunks Chunks, l1txs []*types.L1MessageTx) *DAEntry {
 	return &DAEntry{
 		DaType:     CommitBatch,
 		BatchIndex: batchIndex,

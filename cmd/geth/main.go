@@ -166,6 +166,9 @@ var (
 		utils.L1DeploymentBlockFlag,
 		utils.CircuitCapacityCheckEnabledFlag,
 		utils.RollupVerifyEnabledFlag,
+		utils.DaSyncEnabledFlag,
+		utils.DAModeFlag,
+		utils.DASnapshotFileFlag,
 	}
 
 	rpcFlags = []cli.Flag{

@@ -55,6 +55,7 @@ import (
 	"github.com/scroll-tech/go-ethereum/p2p/enode"
 	"github.com/scroll-tech/go-ethereum/params"
 	"github.com/scroll-tech/go-ethereum/rlp"
+	"github.com/scroll-tech/go-ethereum/rollup/da_syncer"
 	"github.com/scroll-tech/go-ethereum/rollup/rollup_sync_service"
 	"github.com/scroll-tech/go-ethereum/rollup/sync_service"
 	"github.com/scroll-tech/go-ethereum/rollup/tracing"
@@ -73,6 +74,7 @@ type Ethereum struct {
 	txPool             *core.TxPool
 	syncService        *sync_service.SyncService
 	rollupSyncService  *rollup_sync_service.RollupSyncService
+	daSyncer           *da_syncer.DaSyncer
 	blockchain         *core.BlockChain
 	handler            *handler
 	ethDialCandidates  enode.Iterator
@@ -231,6 +233,14 @@ func New(stack *node.Node, config *ethconfig.Config, l1Client sync_service.EthCl
 			return nil, fmt.Errorf("cannot initialize rollup event sync service: %w", err)
 		}
 		eth.rollupSyncService.Start()
+	}
+
+	if config.EnableDASyncing {
+		eth.daSyncer, err = da_syncer.NewDaSyncer(context.Background(), chainConfig, eth.chainDb, l1Client, stack.Config().L1DeploymentBlock, config.DA)
+		if err != nil {
+			return nil, fmt.Errorf("cannot initialize da syncer: %w", err)
+		}
+		eth.daSyncer.Start()
 	}
 
 	// Permit the downloader to use the trie cache allowance during fast sync
@@ -591,6 +601,9 @@ func (s *Ethereum) Stop() error {
 	s.syncService.Stop()
 	if s.config.EnableRollupVerify {
 		s.rollupSyncService.Stop()
+	}
+	if s.config.EnableDASyncing{
+		s.daSyncer.Stop()
 	}
 	s.miner.Close()
 	s.blockchain.Stop()

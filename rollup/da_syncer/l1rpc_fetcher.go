@@ -2,12 +2,16 @@ package da_syncer
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
+	"math/big"
 	"reflect"
 
 	"github.com/scroll-tech/go-ethereum/accounts/abi"
 	"github.com/scroll-tech/go-ethereum/common"
+	"github.com/scroll-tech/go-ethereum/core/rawdb"
 	"github.com/scroll-tech/go-ethereum/core/types"
+	"github.com/scroll-tech/go-ethereum/ethdb"
 	"github.com/scroll-tech/go-ethereum/log"
 	"github.com/scroll-tech/go-ethereum/params"
 	"github.com/scroll-tech/go-ethereum/rollup/sync_service"
@@ -16,6 +20,7 @@ import (
 type L1RPCFetcher struct {
 	fetchBlockRange               uint64
 	client                        *L1Client
+	db                            ethdb.Database
 	ctx                           context.Context
 	latestProcessedBlock          uint64
 	scrollChainABI                *abi.ABI
@@ -24,7 +29,7 @@ type L1RPCFetcher struct {
 	l1FinalizeBatchEventSignature common.Hash
 }
 
-func newL1RpcDaFetcher(ctx context.Context, genesisConfig *params.ChainConfig, l1Client sync_service.EthClient, l1DeploymentBlock, fetchBlockRange uint64) (DaFetcher, error) {
+func newL1RpcDaFetcher(ctx context.Context, genesisConfig *params.ChainConfig, l1Client sync_service.EthClient, db ethdb.Database, l1DeploymentBlock, fetchBlockRange uint64) (DaFetcher, error) {
 	// terminate if the caller does not provide an L1 client (e.g. in tests)
 	if l1Client == nil || (reflect.ValueOf(l1Client).Kind() == reflect.Ptr && reflect.ValueOf(l1Client).IsNil()) {
 		log.Warn("No L1 client provided, L1 rollup sync service will not run")
@@ -51,13 +56,17 @@ func newL1RpcDaFetcher(ctx context.Context, genesisConfig *params.ChainConfig, l
 	if l1DeploymentBlock > 0 {
 		latestProcessedBlock = l1DeploymentBlock - 1
 	}
-
-	// todo: read latest processed block from db
+	block := rawdb.ReadDASyncedL1BlockNumber(db)
+	if block != nil {
+		// restart from latest synced block number
+		latestProcessedBlock = *block
+	}
 
 	daFetcher := L1RPCFetcher{
 		fetchBlockRange:               fetchBlockRange,
 		ctx:                           ctx,
 		client:                        client,
+		db:                            db,
 		latestProcessedBlock:          latestProcessedBlock,
 		scrollChainABI:                scrollChainABI,
 		l1CommitBatchEventSignature:   scrollChainABI.Events["CommitBatch"].ID,
@@ -96,6 +105,7 @@ func (f *L1RPCFetcher) FetchDA() (DA, error) {
 	}
 
 	f.latestProcessedBlock = to
+	rawdb.WriteDASyncedL1BlockNumber(f.db, to)
 	return da, nil
 }
 
@@ -140,17 +150,12 @@ func (f *L1RPCFetcher) processLogsToDA(logs []types.Log) (DA, error) {
 			return nil, fmt.Errorf("unknown event, topic: %v, tx hash: %v", vLog.Topics[0].Hex(), vLog.TxHash.Hex())
 		}
 	}
-
-	// note: the batch updates above are idempotent, if we crash
-	// before this line and reexecute the previous steps, we will
-	// get the same result.
-	// todo: store to db latest process block number
 	return da, nil
 }
 
-func (f *L1RPCFetcher) getBatch(batchIndex uint64, vLog *types.Log) (Chunks, L1Txs, error) {
+func (f *L1RPCFetcher) getBatch(batchIndex uint64, vLog *types.Log) (Chunks, []*types.L1MessageTx, error) {
 	var chunks Chunks
-	var l1Txs L1Txs
+	var l1Txs []*types.L1MessageTx
 	if batchIndex == 0 {
 		return chunks, l1Txs, nil
 	}
@@ -205,13 +210,53 @@ func (f *L1RPCFetcher) getBatch(batchIndex uint64, vLog *types.Log) (Chunks, L1T
 		return nil, nil, fmt.Errorf("failed to decode calldata into commitBatch args, values: %+v, err: %w", values, err)
 	}
 
-	chunks, err = DecodeChunks(args.Chunks)
+	chunks, err = decodeChunks(args.Chunks)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to unpack decode chunks in batch number: %v, err: %w", batchIndex, err)
+		return nil, nil, fmt.Errorf("failed to unpack chunks: %v, err: %w", batchIndex, err)
 	}
 
-	// todo: l1txs can be loaded from db that filled by existing l1 msg sync service
-	l1Txs = nil
+	parentTotalL1MessagePopped := getBatchTotalL1MessagePopped(args.ParentBatchHeader)
+	totalL1MessagePopped := countTotalL1MessagePopped(chunks)
+	skippedBitmap, err := decodeBitmap(args.SkippedL1MessageBitmap, totalL1MessagePopped)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to decode bitmap: %v, err: %w", batchIndex, err)
+	}
+
+	// get all necessary l1msgs without skipped
+	currentIndex := parentTotalL1MessagePopped
+	for index := 0; index < int(totalL1MessagePopped); index++ {
+		for isL1MessageSkipped(skippedBitmap, currentIndex-parentTotalL1MessagePopped) {
+			currentIndex++
+		}
+		l1Txs = append(l1Txs, rawdb.ReadL1Message(f.db, currentIndex))
+		currentIndex++
+	}
 	return chunks, l1Txs, nil
 
+}
+
+func getBatchTotalL1MessagePopped(batchHeader []byte) uint64 {
+	return binary.BigEndian.Uint64(batchHeader[17:25])
+}
+
+func decodeBitmap(skippedL1MessageBitmap []byte, totalL1MessagePopped uint64) ([]*big.Int, error) {
+	length := len(skippedL1MessageBitmap)
+	if length%32 != 0 {
+		return nil, fmt.Errorf("skippedL1MessageBitmap length doesn't match, skippedL1MessageBitmap length should be equal 0 modulo 32, length of skippedL1MessageBitmap: %v", length)
+	}
+	if length*8 < int(totalL1MessagePopped) {
+		return nil, fmt.Errorf("skippedL1MessageBitmap length is too small, skippedL1MessageBitmap length should be at least %v, length of skippedL1MessageBitmap: %v", (totalL1MessagePopped+7)/8, length)
+	}
+	var skippedBitmap []*big.Int
+	for index := 0; index < length/32; index++ {
+		bitmap := big.NewInt(0).SetBytes(skippedL1MessageBitmap[index*32 : index*32+32])
+		skippedBitmap = append(skippedBitmap, bitmap)
+	}
+	return skippedBitmap, nil
+}
+
+func isL1MessageSkipped(skippedBitmap []*big.Int, index uint64) bool {
+	quo := index / 256
+	rem := index % 256
+	return skippedBitmap[quo].Bit(int(rem)) != 0
 }

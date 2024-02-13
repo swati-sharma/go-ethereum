@@ -37,6 +37,7 @@ import (
 	"github.com/scroll-tech/go-ethereum/miner"
 	"github.com/scroll-tech/go-ethereum/node"
 	"github.com/scroll-tech/go-ethereum/params"
+	"github.com/scroll-tech/go-ethereum/rollup/da_syncer"
 )
 
 // FullNodeGPO contains default gasprice oracle settings for full node.
@@ -93,6 +94,9 @@ var Defaults = Config{
 	GPO:           FullNodeGPO,
 	RPCTxFeeCap:   1,  // 1 ether
 	MaxBlockRange: -1, // Default unconfigured value: no block range limit for backward compatibility
+	DA: da_syncer.Config{
+		FetcherMode: da_syncer.L1RPC,
+	},
 }
 
 func init() {
@@ -217,6 +221,12 @@ type Config struct {
 
 	// Max block range for eth_getLogs api method
 	MaxBlockRange int64
+
+	// Enable syncing node from DA
+	EnableDASyncing bool
+
+	// DA syncer config
+	DA da_syncer.Config
 }
 
 // CreateConsensusEngine creates a consensus engine for the given chain configuration.

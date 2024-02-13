@@ -116,6 +116,9 @@ var (
 	batchMetaPrefix                   = []byte("R-bm")
 	finalizedL2BlockNumberKey         = []byte("R-finalized")
 
+	// Scroll da syncer store
+	daSyncedL1BlockNumberKey = []byte("LastDASyncedL1BlockNumber")
+
 	// Row consumption
 	rowConsumptionPrefix = []byte("rc") // rowConsumptionPrefix + hash -> row consumption by block
 

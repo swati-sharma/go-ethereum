@@ -14,8 +14,8 @@ type Chunk struct {
 
 type Chunks []*Chunk
 
-// DecodeChunks decodes the provided chunks into a list of chunks.
-func DecodeChunks(chunksData [][]byte) (Chunks, error) {
+// decodeChunks decodes the provided chunks into a list of chunks.
+func decodeChunks(chunksData [][]byte) (Chunks, error) {
 	var chunks Chunks
 	for _, chunk := range chunksData {
 		if len(chunk) < 1 {
@@ -39,7 +39,7 @@ func DecodeChunks(chunksData [][]byte) (Chunks, error) {
 		}
 
 		var l2Txs [][]byte
-		var txLen int = 0
+		txLen := 0
 
 		for currentIndex := 1 + numBlocks*blockContextByteSize; currentIndex < len(chunk); currentIndex += 4 + txLen {
 			if len(chunk) < currentIndex+4 {
@@ -59,4 +59,14 @@ func DecodeChunks(chunksData [][]byte) (Chunks, error) {
 		})
 	}
 	return chunks, nil
+}
+
+func countTotalL1MessagePopped(chunks Chunks) uint64 {
+	var total uint64 = 0
+	for _, chunk := range chunks {
+		for _, block := range chunk.BlockContexts {
+			total += uint64(block.NumL1Messages)
+		}
+	}
+	return total
 }

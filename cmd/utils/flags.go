@@ -73,6 +73,7 @@ import (
 	"github.com/scroll-tech/go-ethereum/p2p/nat"
 	"github.com/scroll-tech/go-ethereum/p2p/netutil"
 	"github.com/scroll-tech/go-ethereum/params"
+	"github.com/scroll-tech/go-ethereum/rollup/da_syncer"
 	"github.com/scroll-tech/go-ethereum/rollup/tracing"
 	"github.com/scroll-tech/go-ethereum/rpc"
 )
@@ -848,6 +849,22 @@ var (
 		Name:  "rpc.getlogs.maxrange",
 		Usage: "Limit max fetched block range for `eth_getLogs` method",
 	}
+
+	// Da syncing settings
+	DaSyncEnabledFlag = cli.BoolFlag{
+		Name:  "da.sync",
+		Usage: "Enable node syncing from DA",
+	}
+	defaultDa  = ethconfig.Defaults.DA.FetcherMode
+	DAModeFlag = TextMarshalerFlag{
+		Name:  "da.mode",
+		Usage: `Da sync sync mode ("l1rpc" or "snapshot")`,
+		Value: &defaultDa,
+	}
+	DASnapshotFileFlag = cli.StringFlag{
+		Name:  "da.snapshot.file",
+		Usage: "Snapshot file to sync from da",
+	}
 )
 
 // MakeDataDir retrieves the currently requested data directory, terminating
@@ -1559,6 +1576,18 @@ func setEnableRollupVerify(ctx *cli.Context, cfg *ethconfig.Config) {
 	}
 }
 
+func setDa(ctx *cli.Context, cfg *ethconfig.Config) {
+	if ctx.GlobalIsSet(DaSyncEnabledFlag.Name) {
+		cfg.EnableDASyncing = ctx.GlobalBool(DaSyncEnabledFlag.Name)
+		if ctx.GlobalIsSet(DAModeFlag.Name) {
+			cfg.DA.FetcherMode = *GlobalTextMarshaler(ctx, DAModeFlag.Name).(*da_syncer.FetcherMode)
+		}
+		if ctx.GlobalIsSet(DASnapshotFileFlag.Name) {
+			cfg.DA.SnapshotFilePath = ctx.GlobalString(DASnapshotFileFlag.Name)
+		}
+	}
+}
+
 func setMaxBlockRange(ctx *cli.Context, cfg *ethconfig.Config) {
 	if ctx.GlobalIsSet(MaxBlockRangeFlag.Name) {
 		cfg.MaxBlockRange = ctx.GlobalInt64(MaxBlockRangeFlag.Name)
@@ -1634,6 +1663,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	setLes(ctx, cfg)
 	setCircuitCapacityCheck(ctx, cfg)
 	setEnableRollupVerify(ctx, cfg)
+	setDa(ctx, cfg)
 	setMaxBlockRange(ctx, cfg)
 
 	// Cap the cache allowance and tune the garbage collector
