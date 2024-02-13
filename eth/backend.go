@@ -602,7 +602,7 @@ func (s *Ethereum) Stop() error {
 	if s.config.EnableRollupVerify {
 		s.rollupSyncService.Stop()
 	}
-	if s.config.EnableDASyncing{
+	if s.config.EnableDASyncing {
 		s.daSyncer.Stop()
 	}
 	s.miner.Close()
