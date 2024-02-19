@@ -851,7 +851,7 @@ var (
 	}
 
 	// Da syncing settings
-	DaSyncEnabledFlag = cli.BoolFlag{
+	DASyncEnabledFlag = cli.BoolFlag{
 		Name:  "da.sync",
 		Usage: "Enable node syncing from DA",
 	}
@@ -1577,8 +1577,8 @@ func setEnableRollupVerify(ctx *cli.Context, cfg *ethconfig.Config) {
 }
 
 func setDa(ctx *cli.Context, cfg *ethconfig.Config) {
-	if ctx.GlobalIsSet(DaSyncEnabledFlag.Name) {
-		cfg.EnableDASyncing = ctx.GlobalBool(DaSyncEnabledFlag.Name)
+	if ctx.GlobalIsSet(DASyncEnabledFlag.Name) {
+		cfg.EnableDASyncing = ctx.GlobalBool(DASyncEnabledFlag.Name)
 		if ctx.GlobalIsSet(DAModeFlag.Name) {
 			cfg.DA.FetcherMode = *GlobalTextMarshaler(ctx, DAModeFlag.Name).(*da_syncer.FetcherMode)
 		}

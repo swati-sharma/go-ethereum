@@ -136,7 +136,8 @@ func (s *DaSyncer) processDaToBlocks(daEntry *DAEntry) ([]*types.Block, error) {
 				GasLimit: blockContext.GasLimit,
 			}
 			// create txs
-			var txs types.Transactions
+			// var txs types.Transactions
+			txs := make(types.Transactions, 0, blockContext.NumTransactions)
 			// insert l1 msgs
 			for id := 0; id < int(blockContext.NumL1Messages); id++ {
 				l1Tx := types.NewTx(daEntry.L1Txs[l1TxIndex])

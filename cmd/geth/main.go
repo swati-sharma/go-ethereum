@@ -166,7 +166,7 @@ var (
 		utils.L1DeploymentBlockFlag,
 		utils.CircuitCapacityCheckEnabledFlag,
 		utils.RollupVerifyEnabledFlag,
-		utils.DaSyncEnabledFlag,
+		utils.DASyncEnabledFlag,
 		utils.DAModeFlag,
 		utils.DASnapshotFileFlag,
 	}

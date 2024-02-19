@@ -46,7 +46,7 @@ func (mode *FetcherMode) UnmarshalText(text []byte) error {
 	case "snapshot":
 		*mode = Snapshot
 	default:
-		return fmt.Errorf(`unknown sync mode %q, want "full", "fast" or "light"`, text)
+		return fmt.Errorf(`unknown sync mode %q, want "l1rpc" or "snapshot"`, text)
 	}
 	return nil
 }
