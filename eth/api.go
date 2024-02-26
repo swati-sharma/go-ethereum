@@ -817,3 +817,26 @@ func (api *ScrollAPI) GetSkippedTransactionHashes(ctx context.Context, from uint
 
 	return hashes, nil
 }
+
+// ResetSkippedTransactionsTraces resets the traces for skipped txs stored in db, and returns the list of reset transaction hashes.
+// The skipped txs to reset are specified by the two indices provided (inclusive).
+func (api *ScrollAPI) ResetSkippedTransactionsTraces(ctx context.Context, from uint64, to uint64) ([]common.Hash, error) {
+	hashes, err := api.GetSkippedTransactionHashes(ctx, from, to)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, hash := range hashes {
+		log.Info("resetting skipped tx's traces", "txHash", hash)
+		api.ResetSkippedTransactionTracesByHash(ctx, hash)
+		log.Info("reset skipped tx's traces done", "txHash", hash)
+	}
+
+	return hashes, nil
+}
+
+// ResetSkippedTransactionTracesByHash resets a specified skipped tx's traces stored in db.
+func (api *ScrollAPI) ResetSkippedTransactionTracesByHash(ctx context.Context, hash common.Hash) error {
+	rawdb.ResetSkippedTransactionTracesByHash(api.eth.ChainDb(), hash)
+	return nil
+}

@@ -904,6 +904,16 @@ web3._extend({
 			params: 2
 		}),
 		new web3._extend.Method({
+			name: 'resetSkippedTransactionsTraces',
+			call: 'scroll_resetSkippedTransactionsTraces',
+			params: 2
+		}),
+		new web3._extend.Method({
+			name: 'resetSkippedTransactionTracesByHash',
+			call: 'scroll_resetSkippedTransactionTracesByHash',
+			params: 1
+		}),
+		new web3._extend.Method({
 			name: 'estimateL1DataFee',
 			call: 'scroll_estimateL1DataFee',
 			params: 2,

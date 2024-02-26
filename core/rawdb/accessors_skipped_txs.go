@@ -199,6 +199,16 @@ func WriteSkippedTransaction(db ethdb.Database, tx *types.Transaction, traces *t
 	}
 }
 
+// ResetSkippedTransactionTracesByHash resets the traces stored in local db, by reading the tx and its associated fields,
+// and overwritting it with empty trace
+func ResetSkippedTransactionTracesByHash(db ethdb.Database, txHash common.Hash) {
+	stx := ReadSkippedTransaction(db, txHash)
+	if stx == nil {
+		return
+	}
+	writeSkippedTransaction(db, stx.Tx, nil, stx.Reason, stx.BlockNumber, stx.BlockHash)
+}
+
 // SkippedTransactionIterator is a wrapper around ethdb.Iterator that
 // allows us to iterate over skipped transaction hashes in the database.
 // It implements an interface similar to ethdb.Iterator.
