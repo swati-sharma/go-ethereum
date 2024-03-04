@@ -361,9 +361,8 @@ func (l *txList) Filter(costLimit *big.Int, gasLimit uint64) (types.Transactions
 }
 
 // FilterF removes all transactions from the list that satisfy a predicate.
-// Every removed transaction is returned for any
-// post-removal maintenance. Strict-mode invalidated transactions are also
-// returned.
+// Every removed transaction is returned for any post-removal maintenance.
+// Strict-mode invalidated transactions are also returned.
 func (l *txList) FilterF(f func(tx *types.Transaction) bool) (types.Transactions, types.Transactions) {
 	removed := l.txs.Filter(f)
 
