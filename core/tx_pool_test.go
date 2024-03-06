@@ -324,6 +324,39 @@ func TestInvalidTransactions(t *testing.T) {
 	}
 }
 
+func TestFailingCustomCheck(t *testing.T) {
+	statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+	blockchain := &testBlockChain{10000000, statedb, new(event.Feed)}
+
+	customErr := errors.New("custom error from ValidateTxFunc")
+	localErr := errors.New("custom local error from ValidateTxFunc")
+	poolConfig := testTxPoolConfig
+	poolConfig.ValidateTxFuncs = []ValidateTxFunc{
+		func(tx *types.Transaction, local bool) error {
+			if local {
+				return localErr
+			}
+			return customErr
+		},
+	}
+
+	key, _ := crypto.GenerateKey()
+	pool := NewTxPool(poolConfig, noL1DataFeeConfig, blockchain)
+	// wait for the pool to initialize
+	<-pool.initDoneCh
+
+	tx := dynamicFeeTx(0, 100000, big.NewInt(1), big.NewInt(1), key)
+	from, _ := types.Sender(pool.signer, tx)
+
+	testAddBalance(pool, from, big.NewInt(0xffffffffffffff))
+	if err := pool.AddRemote(tx); !errors.Is(err, customErr) {
+		t.Error("expected", customErr, "got", err)
+	}
+	if err := pool.AddLocal(tx); !errors.Is(err, localErr) {
+		t.Error("expected", localErr, "got", err)
+	}
+}
+
 func TestTransactionQueue(t *testing.T) {
 	t.Parallel()
 

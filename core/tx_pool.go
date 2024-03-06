@@ -164,6 +164,9 @@ type blockChain interface {
 	SubscribeChainHeadEvent(ch chan<- ChainHeadEvent) event.Subscription
 }
 
+// ValidateTxFunc defines a custom validation routine for incoming transactions
+type ValidateTxFunc func(tx *types.Transaction, local bool) error
+
 // TxPoolConfig are the configuration parameters of the transaction pool.
 type TxPoolConfig struct {
 	Locals    []common.Address // Addresses that should be treated by default as local
@@ -179,7 +182,8 @@ type TxPoolConfig struct {
 	AccountQueue uint64 // Maximum number of non-executable transaction slots permitted per account
 	GlobalQueue  uint64 // Maximum number of non-executable transaction slots for all accounts
 
-	Lifetime time.Duration // Maximum amount of time non-executable transaction are queued
+	Lifetime        time.Duration    // Maximum amount of time non-executable transaction are queued
+	ValidateTxFuncs []ValidateTxFunc // Custom validators on incoming transaction
 }
 
 // DefaultTxPoolConfig contains the default configurations for the transaction
@@ -684,6 +688,12 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	}
 	if tx.Gas() < intrGas {
 		return ErrIntrinsicGas
+	}
+
+	for _, validateFunc := range pool.config.ValidateTxFuncs {
+		if err := validateFunc(tx, local); err != nil {
+			return err
+		}
 	}
 	return nil
 }
