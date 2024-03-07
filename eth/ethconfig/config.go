@@ -212,6 +212,9 @@ type Config struct {
 	// Check circuit capacity in block validator
 	CheckCircuitCapacity bool
 
+	// Check circuit capacity in tx pool
+	CheckCircuitCapacityTxPool bool
+
 	// Enable verification of batch consistency between L1 and L2 in rollup
 	EnableRollupVerify bool
 

@@ -837,6 +837,12 @@ var (
 		Usage: "Enable circuit capacity check during block validation",
 	}
 
+	// Circuit capacity check settings
+	CircuitCapacityCheckTxPoolEnabledFlag = cli.BoolFlag{
+		Name:  "ccc-txpool",
+		Usage: "Enable circuit capacity check during txn validation",
+	}
+
 	// Rollup verify service settings
 	RollupVerifyEnabledFlag = cli.BoolFlag{
 		Name:  "rollup.verify",
@@ -1553,6 +1559,12 @@ func setCircuitCapacityCheck(ctx *cli.Context, cfg *ethconfig.Config) {
 	}
 }
 
+func setCheckCircuitCapacityTxPool(ctx *cli.Context, cfg *ethconfig.Config) {
+	if ctx.GlobalIsSet(CircuitCapacityCheckTxPoolEnabledFlag.Name) {
+		cfg.CheckCircuitCapacityTxPool = ctx.GlobalBool(CircuitCapacityCheckTxPoolEnabledFlag.Name)
+	}
+}
+
 func setEnableRollupVerify(ctx *cli.Context, cfg *ethconfig.Config) {
 	if ctx.GlobalIsSet(RollupVerifyEnabledFlag.Name) {
 		cfg.EnableRollupVerify = ctx.GlobalBool(RollupVerifyEnabledFlag.Name)
@@ -1633,6 +1645,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	setWhitelist(ctx, cfg)
 	setLes(ctx, cfg)
 	setCircuitCapacityCheck(ctx, cfg)
+	setCheckCircuitCapacityTxPool(ctx, cfg)
 	setEnableRollupVerify(ctx, cfg)
 	setMaxBlockRange(ctx, cfg)
 
