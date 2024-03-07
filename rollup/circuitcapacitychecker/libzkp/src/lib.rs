@@ -112,6 +112,10 @@ pub mod checker {
         }
 
         let r = panic::catch_unwind(|| {
+            if id == std::u64::MAX {
+                return CircuitCapacityChecker::default().estimate_circuit_capacity(&[traces])
+            }
+
             CHECKERS
                 .get_mut()
                 .ok_or(anyhow!(
@@ -165,6 +169,10 @@ pub mod checker {
         let traces = serde_json::from_slice::<BlockTrace>(&block_trace)?;
 
         let r = panic::catch_unwind(|| {
+            if id == std::u64::MAX {
+                return CircuitCapacityChecker::default().estimate_circuit_capacity(&[traces])
+            }
+
             CHECKERS
                 .get_mut()
                 .ok_or(anyhow!(

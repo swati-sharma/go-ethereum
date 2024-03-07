@@ -11,13 +11,17 @@ import "C" //nolint:typecheck
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"math"
 	"sync"
 	"unsafe"
 
 	"github.com/scroll-tech/go-ethereum/core/types"
 	"github.com/scroll-tech/go-ethereum/log"
 )
+
+var ErrTempChecker = errors.New("this functionality is not supported on a temp checker")
 
 // mutex for concurrent CircuitCapacityChecker creations
 var creationMu sync.Mutex
@@ -43,8 +47,21 @@ func NewCircuitCapacityChecker(lightMode bool) *CircuitCapacityChecker {
 	return ccc
 }
 
+func NewTempCircuitCapacityChecker() *CircuitCapacityChecker {
+	return &CircuitCapacityChecker{ID: math.MaxUint64}
+}
+
+// IsTemp returns if this CircuitCapacityChecker is backed by a persistent instance
+func (ccc *CircuitCapacityChecker) IsTemp() bool {
+	return ccc.ID == math.MaxUint64
+}
+
 // Reset resets a CircuitCapacityChecker
 func (ccc *CircuitCapacityChecker) Reset() {
+	if ccc.IsTemp() {
+		return
+	}
+
 	ccc.Lock()
 	defer ccc.Unlock()
 
@@ -151,6 +168,10 @@ func (ccc *CircuitCapacityChecker) ApplyBlock(traces *types.BlockTrace) (*types.
 
 // CheckTxNum compares whether the tx_count in ccc match the expected
 func (ccc *CircuitCapacityChecker) CheckTxNum(expected int) (bool, uint64, error) {
+	if ccc.IsTemp() {
+		return false, 0, ErrTempChecker
+	}
+
 	ccc.Lock()
 	defer ccc.Unlock()
 
@@ -174,6 +195,10 @@ func (ccc *CircuitCapacityChecker) CheckTxNum(expected int) (bool, uint64, error
 
 // SetLightMode sets to ccc light mode
 func (ccc *CircuitCapacityChecker) SetLightMode(lightMode bool) error {
+	if ccc.IsTemp() {
+		return ErrTempChecker
+	}
+
 	ccc.Lock()
 	defer ccc.Unlock()
 
