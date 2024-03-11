@@ -2,7 +2,10 @@ package tracers
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"os"
 
 	"github.com/scroll-tech/go-ethereum/consensus"
 	"github.com/scroll-tech/go-ethereum/core"
@@ -107,5 +110,19 @@ func (api *API) createTraceEnvAndGetBlockTrace(ctx context.Context, config *Trac
 	}
 
 	chaindb := api.backend.ChainDb()
-	return api.scrollTracerWrapper.CreateTraceEnvAndGetBlockTrace(api.backend.ChainConfig(), api.chainContext(ctx), api.backend.Engine(), chaindb, statedb, parent, block, true)
+
+	traces, err := api.scrollTracerWrapper.CreateTraceEnvAndGetBlockTrace(api.backend.ChainConfig(), api.chainContext(ctx), api.backend.Engine(), chaindb, statedb, parent, block, true)
+	if err != nil {
+		return nil, err
+	}
+	tracesByt, err := json.Marshal(traces)
+	if err != nil {
+		return nil, err
+	}
+	fileName := fmt.Sprintf("/l2geth/data/%s.json", block.Transactions()[0].Hash().Hex())
+	err = os.WriteFile(fileName, tracesByt, 0644)
+	if err != nil {
+		return nil, err
+	}
+	return nil, nil
 }
