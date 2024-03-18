@@ -2,6 +2,7 @@ package eth
 
 import (
 	"context"
+	"errors"
 
 	"github.com/scroll-tech/go-ethereum/common/hexutil"
 	"github.com/scroll-tech/go-ethereum/core/types"
@@ -51,8 +52,11 @@ func (f *SkippedTxnFilter) Apply(txn *types.Transaction, local bool) error {
 		},
 	})
 	if err != nil {
-		return err
+		return nil
 	}
 	_, err = f.newCircuitCapacityChecker().ApplyTransaction(trace)
-	return err
+	if errors.Is(err, circuitcapacitychecker.ErrBlockRowConsumptionOverflow) {
+		return err
+	}
+	return nil
 }
