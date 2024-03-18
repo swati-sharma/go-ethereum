@@ -106,6 +106,13 @@ func (api *API) createTraceEnvAndGetBlockTrace(ctx context.Context, config *Trac
 		return nil, err
 	}
 
+	// Apply the customized state rules if required.
+	if config != nil {
+		if err := config.StateOverrides.Apply(statedb); err != nil {
+			return nil, err
+		}
+	}
+
 	chaindb := api.backend.ChainDb()
 	return api.scrollTracerWrapper.CreateTraceEnvAndGetBlockTrace(api.backend.ChainConfig(), api.chainContext(ctx), api.backend.Engine(), chaindb, statedb, parent, block, true)
 }

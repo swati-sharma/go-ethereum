@@ -164,8 +164,8 @@ type blockChain interface {
 	SubscribeChainHeadEvent(ch chan<- ChainHeadEvent) event.Subscription
 }
 
-// ValidateTxFunc defines a custom validation routine for incoming transactions
-type ValidateTxFunc func(tx *types.Transaction, local bool) error
+// PreValidateTxFunc defines a custom validation routine for incoming transactions
+type PreValidateTxFunc func(tx *types.Transaction, local bool) error
 
 // TxPoolConfig are the configuration parameters of the transaction pool.
 type TxPoolConfig struct {
@@ -182,8 +182,8 @@ type TxPoolConfig struct {
 	AccountQueue uint64 // Maximum number of non-executable transaction slots permitted per account
 	GlobalQueue  uint64 // Maximum number of non-executable transaction slots for all accounts
 
-	Lifetime        time.Duration    // Maximum amount of time non-executable transaction are queued
-	ValidateTxFuncs []ValidateTxFunc // Custom validators on incoming transaction
+	Lifetime          time.Duration       // Maximum amount of time non-executable transaction are queued
+	PreValidateTxFunc []PreValidateTxFunc // Custom validators on incoming transaction, these are ran before locking pool mutex
 }
 
 // DefaultTxPoolConfig contains the default configurations for the transaction
@@ -689,12 +689,6 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	if tx.Gas() < intrGas {
 		return ErrIntrinsicGas
 	}
-
-	for _, validateFunc := range pool.config.ValidateTxFuncs {
-		if err := validateFunc(tx, local); err != nil {
-			return err
-		}
-	}
 	return nil
 }
 
@@ -968,9 +962,24 @@ func (pool *TxPool) addTxs(txs []*types.Transaction, local, sync bool) []error {
 		return errs
 	}
 
+	// prevalidate Txns without locking the mutex
+	preValidatedTxns := make([]*types.Transaction, 0, len(news))
+	for _, newTxn := range news {
+		var err error
+		for _, validateFunc := range pool.config.PreValidateTxFunc {
+			if err = validateFunc(newTxn, local); err != nil {
+				log.Warn("Discarding txn that failed pre-validation", "tx_hash", newTxn.Hash().Hex())
+				break
+			}
+		}
+		if err == nil {
+			preValidatedTxns = append(preValidatedTxns, newTxn)
+		}
+	}
+
 	// Process all the new transaction and merge any errors into the original slice
 	pool.mu.Lock()
-	newErrs, dirtyAddrs := pool.addTxsLocked(news, local)
+	newErrs, dirtyAddrs := pool.addTxsLocked(preValidatedTxns, local)
 	pool.mu.Unlock()
 
 	var nilSlot = 0

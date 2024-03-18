@@ -170,9 +170,10 @@ func (api *API) blockByNumberAndHash(ctx context.Context, number rpc.BlockNumber
 // TraceConfig holds extra parameters to trace functions.
 type TraceConfig struct {
 	*vm.LogConfig
-	Tracer  *string
-	Timeout *string
-	Reexec  *uint64
+	Tracer         *string
+	Timeout        *string
+	Reexec         *uint64
+	StateOverrides *ethapi.StateOverride
 }
 
 // TraceCallConfig is the config for traceCall API. It holds one more

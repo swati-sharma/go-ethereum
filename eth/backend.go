@@ -228,8 +228,9 @@ func New(stack *node.Node, config *ethconfig.Config, l1Client sync_service.EthCl
 		config.TxPool.Journal = stack.ResolvePath(config.TxPool.Journal)
 	}
 	if config.CheckCircuitCapacityTxPool {
-		skippedTxnFilter := NewSkippedTxnFilter(eth.blockchain, tracers.NewAPI(eth.APIBackend, tracing.NewTracerWrapper()), circuitcapacitychecker.NewTempCircuitCapacityChecker)
-		config.TxPool.ValidateTxFuncs = append(config.TxPool.ValidateTxFuncs, skippedTxnFilter.Apply)
+		skippedTxnFilter := NewSkippedTxnFilter(eth.blockchain, tracers.NewAPI(eth.APIBackend, tracing.NewTracerWrapper()),
+			circuitcapacitychecker.NewTempCircuitCapacityChecker, types.LatestSigner(chainConfig))
+		config.TxPool.PreValidateTxFunc = append(config.TxPool.PreValidateTxFunc, skippedTxnFilter.Apply)
 	}
 	eth.txPool = core.NewTxPool(config.TxPool, chainConfig, eth.blockchain)
 

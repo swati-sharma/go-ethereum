@@ -331,7 +331,7 @@ func TestFailingCustomCheck(t *testing.T) {
 	customErr := errors.New("custom error from ValidateTxFunc")
 	localErr := errors.New("custom local error from ValidateTxFunc")
 	poolConfig := testTxPoolConfig
-	poolConfig.ValidateTxFuncs = []ValidateTxFunc{
+	poolConfig.PreValidateTxFunc = []PreValidateTxFunc{
 		func(tx *types.Transaction, local bool) error {
 			if local {
 				return localErr
