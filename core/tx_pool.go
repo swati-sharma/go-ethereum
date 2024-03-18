@@ -964,10 +964,11 @@ func (pool *TxPool) addTxs(txs []*types.Transaction, local, sync bool) []error {
 
 	// prevalidate Txns without locking the mutex
 	preValidatedTxns := make([]*types.Transaction, 0, len(news))
-	for _, newTxn := range news {
+	for i, newTxn := range news {
 		var err error
 		for _, validateFunc := range pool.config.PreValidateTxFunc {
 			if err = validateFunc(newTxn, local); err != nil {
+				errs[i] = err
 				log.Warn("Discarding txn that failed pre-validation", "tx_hash", newTxn.Hash().Hex())
 				break
 			}
