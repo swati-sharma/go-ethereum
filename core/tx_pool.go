@@ -1439,7 +1439,7 @@ func (pool *TxPool) executableTxFilter(addr common.Address) func(tx *types.Trans
 			// recheck L1 data fee, as the oracle price may have changed
 			l1DataFee, err := fees.CalculateL1DataFee(tx, pool.currentState)
 			if err != nil {
-				log.Trace("Failed to calculate L1 data fee", "err", err)
+				log.Error("Failed to calculate L1 data fee", "err", err, "tx", tx)
 				return false
 			}
 			return costLimit.Cmp(new(big.Int).Add(tx.Cost(), l1DataFee)) < 0
