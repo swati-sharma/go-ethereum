@@ -754,17 +754,7 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 	from, _ := types.Sender(pool.signer, tx) // already validated
 	if list := pool.pending[from]; list != nil && list.Overlaps(tx) {
 		// Nonce already pending, check if required price bump is met
-		l1DataFee := big.NewInt(0)
-		if pool.chainconfig.Scroll.FeeVaultEnabled() {
-			var err error
-			l1DataFee, err = fees.CalculateL1DataFee(tx, pool.currentState)
-			if err != nil {
-				log.Error("Failed to calculate L1 data fee", "err", err, "tx", tx)
-				return false, err
-			}
-		}
-
-		inserted, old := list.Add(tx, l1DataFee, pool.config.PriceBump)
+		inserted, old := list.Add(tx, pool.currentState, pool.config.PriceBump)
 		if !inserted {
 			pendingDiscardMeter.Mark(1)
 			return false, ErrReplaceUnderpriced
@@ -815,17 +805,7 @@ func (pool *TxPool) enqueueTx(hash common.Hash, tx *types.Transaction, local boo
 		pool.queue[from] = newTxList(false)
 	}
 
-	l1DataFee := big.NewInt(0)
-	if pool.chainconfig.Scroll.FeeVaultEnabled() {
-		var err error
-		l1DataFee, err = fees.CalculateL1DataFee(tx, pool.currentState)
-		if err != nil {
-			log.Error("Failed to calculate L1 data fee", "err", err, "tx", tx)
-			return false, err
-		}
-	}
-
-	inserted, old := pool.queue[from].Add(tx, l1DataFee, pool.config.PriceBump)
+	inserted, old := pool.queue[from].Add(tx, pool.currentState, pool.config.PriceBump)
 	if !inserted {
 		// An older transaction was better, discard this
 		queuedDiscardMeter.Mark(1)
@@ -879,17 +859,7 @@ func (pool *TxPool) promoteTx(addr common.Address, hash common.Hash, tx *types.T
 	}
 	list := pool.pending[addr]
 
-	l1DataFee := big.NewInt(0)
-	if pool.chainconfig.Scroll.FeeVaultEnabled() {
-		var err error
-		l1DataFee, err = fees.CalculateL1DataFee(tx, pool.currentState)
-		if err != nil {
-			log.Error("Failed to calculate L1 data fee", "err", err, "tx", tx)
-			return false
-		}
-	}
-
-	inserted, old := list.Add(tx, l1DataFee, pool.config.PriceBump)
+	inserted, old := list.Add(tx, pool.currentState, pool.config.PriceBump)
 	if !inserted {
 		// An older transaction was better, discard this
 		pool.all.Remove(hash)

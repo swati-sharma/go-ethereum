@@ -26,7 +26,10 @@ import (
 	"time"
 
 	"github.com/scroll-tech/go-ethereum/common"
+	"github.com/scroll-tech/go-ethereum/core/state"
 	"github.com/scroll-tech/go-ethereum/core/types"
+	"github.com/scroll-tech/go-ethereum/log"
+	"github.com/scroll-tech/go-ethereum/rollup/fees"
 )
 
 // nonceHeap is a heap.Interface implementation over 64bit unsigned integers for
@@ -278,7 +281,7 @@ func (l *txList) Overlaps(tx *types.Transaction) bool {
 //
 // If the new transaction is accepted into the list, the lists' cost and gas
 // thresholds are also potentially updated.
-func (l *txList) Add(tx *types.Transaction, l1DataFee *big.Int, priceBump uint64) (bool, *types.Transaction) {
+func (l *txList) Add(tx *types.Transaction, state *state.StateDB, priceBump uint64) (bool, *types.Transaction) {
 	// If there's an older better transaction, abort
 	old := l.txs.Get(tx.Nonce())
 	if old != nil {
@@ -303,6 +306,15 @@ func (l *txList) Add(tx *types.Transaction, l1DataFee *big.Int, priceBump uint64
 		}
 	}
 	// Otherwise overwrite the old transaction with the current one
+	l1DataFee := big.NewInt(0)
+	if state != nil {
+		var err error
+		l1DataFee, err = fees.CalculateL1DataFee(tx, state)
+		if err != nil {
+			log.Error("Failed to calculate L1 data fee", "err", err, "tx", tx)
+			return false, nil
+		}
+	}
 	l.txs.Put(tx)
 	if cost := new(big.Int).Add(tx.Cost(), l1DataFee); l.costcap.Cmp(cost) < 0 {
 		l.costcap = cost
