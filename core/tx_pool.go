@@ -804,7 +804,18 @@ func (pool *TxPool) enqueueTx(hash common.Hash, tx *types.Transaction, local boo
 	if pool.queue[from] == nil {
 		pool.queue[from] = newTxList(false)
 	}
-	inserted, old := pool.queue[from].Add(tx, pool.config.PriceBump)
+
+	l1DataFee := big.NewInt(0)
+	if pool.chainconfig.Scroll.FeeVaultEnabled() {
+		var err error
+		l1DataFee, err = fees.CalculateL1DataFee(tx, pool.currentState)
+		if err != nil {
+			log.Error("Failed to calculate L1 data fee", "err", err, "tx", tx)
+			return false, err
+		}
+	}
+
+	inserted, old := pool.queue[from].Add(tx, l1DataFee, pool.config.PriceBump)
 	if !inserted {
 		// An older transaction was better, discard this
 		queuedDiscardMeter.Mark(1)
@@ -858,7 +869,17 @@ func (pool *TxPool) promoteTx(addr common.Address, hash common.Hash, tx *types.T
 	}
 	list := pool.pending[addr]
 
-	inserted, old := list.Add(tx, pool.config.PriceBump)
+	l1DataFee := big.NewInt(0)
+	if pool.chainconfig.Scroll.FeeVaultEnabled() {
+		var err error
+		l1DataFee, err = fees.CalculateL1DataFee(tx, pool.currentState)
+		if err != nil {
+			log.Error("Failed to calculate L1 data fee", "err", err, "tx", tx)
+			return false
+		}
+	}
+
+	inserted, old := list.Add(tx, l1DataFee, pool.config.PriceBump)
 	if !inserted {
 		// An older transaction was better, discard this
 		pool.all.Remove(hash)
@@ -1383,7 +1404,7 @@ func (pool *TxPool) promoteExecutables(accounts []common.Address) []*types.Trans
 		log.Trace("Removed old queued transactions", "count", len(forwards))
 
 		// Drop all transactions that are too costly (low balance or out of gas)
-		drops, _ := list.FilterF(pool.executableTxFilter(addr))
+		drops, _ := list.FilterF(pool.currentState.GetBalance(addr), pool.currentMaxGas, pool.executableTxFilter(addr))
 		for _, tx := range drops {
 			hash := tx.Hash()
 			pool.all.Remove(hash)
@@ -1603,7 +1624,7 @@ func (pool *TxPool) demoteUnexecutables() {
 			log.Trace("Removed old pending transaction", "hash", hash)
 		}
 		// Drop all transactions that are too costly (low balance or out of gas), and queue any invalids back for later
-		drops, invalids := list.FilterF(pool.executableTxFilter(addr))
+		drops, invalids := list.FilterF(pool.currentState.GetBalance(addr), pool.currentMaxGas, pool.executableTxFilter(addr))
 		for _, tx := range drops {
 			hash := tx.Hash()
 			log.Trace("Removed unpayable pending transaction", "hash", hash)

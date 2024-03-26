@@ -278,7 +278,7 @@ func (l *txList) Overlaps(tx *types.Transaction) bool {
 //
 // If the new transaction is accepted into the list, the lists' cost and gas
 // thresholds are also potentially updated.
-func (l *txList) Add(tx *types.Transaction, priceBump uint64) (bool, *types.Transaction) {
+func (l *txList) Add(tx *types.Transaction, l1DataFee *big.Int, priceBump uint64) (bool, *types.Transaction) {
 	// If there's an older better transaction, abort
 	old := l.txs.Get(tx.Nonce())
 	if old != nil {
@@ -304,7 +304,7 @@ func (l *txList) Add(tx *types.Transaction, priceBump uint64) (bool, *types.Tran
 	}
 	// Otherwise overwrite the old transaction with the current one
 	l.txs.Put(tx)
-	if cost := tx.Cost(); l.costcap.Cmp(cost) < 0 {
+	if cost := new(big.Int).Add(tx.Cost(), l1DataFee); l.costcap.Cmp(cost) < 0 {
 		l.costcap = cost
 	}
 	if gas := tx.Gas(); l.gascap < gas {
@@ -363,7 +363,14 @@ func (l *txList) Filter(costLimit *big.Int, gasLimit uint64) (types.Transactions
 // FilterF removes all transactions from the list that satisfy a predicate.
 // Every removed transaction is returned for any post-removal maintenance.
 // Strict-mode invalidated transactions are also returned.
-func (l *txList) FilterF(f func(tx *types.Transaction) bool) (types.Transactions, types.Transactions) {
+func (l *txList) FilterF(costLimit *big.Int, gasLimit uint64, f func(tx *types.Transaction) bool) (types.Transactions, types.Transactions) {
+	// If all transactions are below the threshold, short circuit
+	if l.costcap.Cmp(costLimit) <= 0 && l.gascap <= gasLimit {
+		return nil, nil
+	}
+	l.costcap = new(big.Int).Set(costLimit) // Lower the caps to the thresholds
+	l.gascap = gasLimit
+
 	removed := l.txs.Filter(f)
 
 	if len(removed) == 0 {
