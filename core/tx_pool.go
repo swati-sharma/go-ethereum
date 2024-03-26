@@ -754,7 +754,17 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 	from, _ := types.Sender(pool.signer, tx) // already validated
 	if list := pool.pending[from]; list != nil && list.Overlaps(tx) {
 		// Nonce already pending, check if required price bump is met
-		inserted, old := list.Add(tx, pool.config.PriceBump)
+		l1DataFee := big.NewInt(0)
+		if pool.chainconfig.Scroll.FeeVaultEnabled() {
+			var err error
+			l1DataFee, err = fees.CalculateL1DataFee(tx, pool.currentState)
+			if err != nil {
+				log.Error("Failed to calculate L1 data fee", "err", err, "tx", tx)
+				return false, err
+			}
+		}
+
+		inserted, old := list.Add(tx, l1DataFee, pool.config.PriceBump)
 		if !inserted {
 			pendingDiscardMeter.Mark(1)
 			return false, ErrReplaceUnderpriced
