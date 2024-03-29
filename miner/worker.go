@@ -480,7 +480,7 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 					timer.Reset(recommit)
 					continue
 				}
-				commit(true, commitInterruptResubmit)
+				commit(false, commitInterruptResubmit)
 			}
 
 		case interval := <-w.resubmitIntervalCh:
