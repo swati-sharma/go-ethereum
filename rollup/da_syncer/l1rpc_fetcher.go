@@ -77,11 +77,11 @@ func newL1RpcDaFetcher(ctx context.Context, genesisConfig *params.ChainConfig, l
 }
 
 // Fetch DA fetches all da events and converts it to DA format in some fetchBlockRange
-func (f *L1RPCFetcher) FetchDA() (DA, error) {
+func (f *L1RPCFetcher) FetchDA() (DA, uint64, error) {
 	latestConfirmed, err := f.client.getLatestFinalizedBlockNumber(f.ctx)
 	if err != nil {
 		log.Warn("failed to get latest confirmed block number", "err", err)
-		return nil, err
+		return nil, 0, err
 	}
 
 	log.Trace("Da fetcher fetch rollup events", "latest processed block", f.latestProcessedBlock, "latest confirmed", latestConfirmed)
@@ -91,22 +91,26 @@ func (f *L1RPCFetcher) FetchDA() (DA, error) {
 	if to > latestConfirmed {
 		to = latestConfirmed
 	}
+	log.Info("L1RpcFetcher fetching...", "from", from, "to", to, "latest processed block", f.latestProcessedBlock, "latest confirmed", latestConfirmed)
 
 	logs, err := f.client.fetchRollupEventsInRange(f.ctx, from, to)
+	for id, ll := range logs {
+		log.Info("log number", "id", id, "block number", ll.BlockNumber, "txhash", ll.TxHash)
+	}
 	if err != nil {
 		log.Error("failed to fetch rollup events in range", "from block", from, "to block", to, "err", err)
-		return nil, err
+		return nil, 0, err
 	}
-
+	log.Info("L1RPCFetcher fetched logs", "log size", len(logs))
 	da, err := f.processLogsToDA(logs)
 	if err != nil {
 		log.Error("failed to process rollup events in range", "from block", from, "to block", to, "err", err)
-		return nil, err
+		return nil, 0, err
 	}
-
+	log.Info("L1Rpcfetcher processed logs to da", "da len", len(da))
 	f.latestProcessedBlock = to
-	rawdb.WriteDASyncedL1BlockNumber(f.db, to)
-	return da, nil
+	// rawdb.WriteDASyncedL1BlockNumber(f.db, to)
+	return da, to, nil
 }
 
 func (f *L1RPCFetcher) processLogsToDA(logs []types.Log) (DA, error) {
@@ -228,7 +232,11 @@ func (f *L1RPCFetcher) getBatch(batchIndex uint64, vLog *types.Log) (Chunks, []*
 		for isL1MessageSkipped(skippedBitmap, currentIndex-parentTotalL1MessagePopped) {
 			currentIndex++
 		}
-		l1Txs = append(l1Txs, rawdb.ReadL1Message(f.db, currentIndex))
+		l1Tx := rawdb.ReadL1Message(f.db, currentIndex)
+		if l1Tx == nil {
+			return nil, nil, fmt.Errorf("failed to read L1 message from db, l1 message index: %v", currentIndex)
+		}
+		l1Txs = append(l1Txs, l1Tx)
 		currentIndex++
 	}
 	return chunks, l1Txs, nil
@@ -260,3 +268,5 @@ func isL1MessageSkipped(skippedBitmap []*big.Int, index uint64) bool {
 	rem := index % 256
 	return skippedBitmap[quo].Bit(int(rem)) != 0
 }
+
+// l2geth --scroll --datadir "./l2geth-datadir" --gcmode archive --cache.noprefetch --http --http.addr "0.0.0.0" --http.port 8545 --http.api "eth,net,web3,debug,scroll" --l1.endpoint "$L2GETH_L1_ENDPOINT" --da.sync

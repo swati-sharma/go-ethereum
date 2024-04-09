@@ -236,7 +236,7 @@ func New(stack *node.Node, config *ethconfig.Config, l1Client sync_service.EthCl
 	}
 
 	if config.EnableDASyncing {
-		eth.daSyncer, err = da_syncer.NewDaSyncer(context.Background(), chainConfig, eth.chainDb, l1Client, stack.Config().L1DeploymentBlock, config.DA)
+		eth.daSyncer, err = da_syncer.NewDaSyncer(context.Background(), eth.blockchain, chainConfig, eth.chainDb, l1Client, stack.Config().L1DeploymentBlock, config.DA)
 		if err != nil {
 			return nil, fmt.Errorf("cannot initialize da syncer: %w", err)
 		}
@@ -249,18 +249,20 @@ func New(stack *node.Node, config *ethconfig.Config, l1Client sync_service.EthCl
 	if checkpoint == nil {
 		checkpoint = params.TrustedCheckpoints[genesisHash]
 	}
-	if eth.handler, err = newHandler(&handlerConfig{
-		Database:   chainDb,
-		Chain:      eth.blockchain,
-		TxPool:     eth.txPool,
-		Network:    config.NetworkId,
-		Sync:       config.SyncMode,
-		BloomCache: uint64(cacheLimit),
-		EventMux:   eth.eventMux,
-		Checkpoint: checkpoint,
-		Whitelist:  config.Whitelist,
-	}); err != nil {
-		return nil, err
+	if !config.EnableDASyncing {
+		if eth.handler, err = newHandler(&handlerConfig{
+			Database:   chainDb,
+			Chain:      eth.blockchain,
+			TxPool:     eth.txPool,
+			Network:    config.NetworkId,
+			Sync:       config.SyncMode,
+			BloomCache: uint64(cacheLimit),
+			EventMux:   eth.eventMux,
+			Checkpoint: checkpoint,
+			Whitelist:  config.Whitelist,
+		}); err != nil {
+			return nil, err
+		}
 	}
 
 	eth.miner = miner.New(eth, &config.Miner, chainConfig, eth.EventMux(), eth.engine, eth.isLocalBlock)
@@ -292,7 +294,7 @@ func New(stack *node.Node, config *ethconfig.Config, l1Client sync_service.EthCl
 
 	// Register the backend on the node
 	stack.RegisterAPIs(eth.APIs())
-	stack.RegisterProtocols(eth.Protocols())
+	// stack.RegisterProtocols(eth.Protocols())
 	stack.RegisterLifecycle(eth)
 	// Check for unclean shutdown
 	if uncleanShutdowns, discards, err := rawdb.PushUncleanShutdownMarker(chainDb); err != nil {
@@ -347,12 +349,12 @@ func (s *Ethereum) APIs() []rpc.API {
 			Version:   "1.0",
 			Service:   NewPublicMinerAPI(s),
 			Public:    true,
-		}, {
+		}, /*{
 			Namespace: "eth",
 			Version:   "1.0",
 			Service:   downloader.NewPublicDownloaderAPI(s.handler.downloader, s.eventMux),
 			Public:    true,
-		}, {
+		},*/{
 			Namespace: "miner",
 			Version:   "1.0",
 			Service:   NewPrivateMinerAPI(s),
@@ -518,7 +520,7 @@ func (s *Ethereum) StartMining(threads int) error {
 		}
 		// If mining is started, we can disable the transaction rejection mechanism
 		// introduced to speed sync times.
-		atomic.StoreUint32(&s.handler.acceptTxs, 1)
+		// atomic.StoreUint32(&s.handler.acceptTxs, 1)
 
 		go s.miner.Start(eb)
 	}
@@ -574,7 +576,7 @@ func (s *Ethereum) Start() error {
 	s.startBloomHandlers(params.BloomBitsBlocks)
 
 	// Figure out a max peers count based on the server limits
-	maxPeers := s.p2pServer.MaxPeers
+	// maxPeers := s.p2pServer.MaxPeers
 	//if s.config.LightServ > 0 {
 	//	if s.config.LightPeers >= s.p2pServer.MaxPeers {
 	//		return fmt.Errorf("invalid peer config: light peer count (%d) >= total peer count (%d)", s.config.LightPeers, s.p2pServer.MaxPeers)
@@ -582,7 +584,7 @@ func (s *Ethereum) Start() error {
 	//	maxPeers -= s.config.LightPeers
 	//}
 	// Start the networking layer and the light server if requested
-	s.handler.Start(maxPeers)
+	// s.handler.Start(maxPeers)
 	return nil
 }
 
@@ -592,7 +594,7 @@ func (s *Ethereum) Stop() error {
 	// Stop all the peer-related stuff first.
 	s.ethDialCandidates.Close()
 	s.snapDialCandidates.Close()
-	s.handler.Stop()
+	// s.handler.Stop()
 
 	// Then stop everything else.
 	s.bloomIndexer.Close()
