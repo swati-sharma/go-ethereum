@@ -25,6 +25,7 @@ import (
 	"testing"
 
 	"github.com/holiman/uint256"
+
 	"github.com/scroll-tech/go-ethereum/core/rawdb"
 	"github.com/scroll-tech/go-ethereum/core/state"
 
