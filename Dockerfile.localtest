@@ -1,11 +1,13 @@
-# Build libzkp dependency
-FROM --platform=linux/arm64 scrolltech/go-rust-builder:go-1.20-rust-nightly-2022-12-10 as chef
-WORKDIR app
+# Build libzkp dependency using a custom builder image
+FROM scrolltech/go-rust-builder:go-1.20-rust-nightly-2022-12-10 as chef
+WORKDIR /app
 
+# Prepare dependencies using Cargo Chef to cache dependencies
 FROM chef as planner
 COPY ./rollup/circuitcapacitychecker/libzkp/ .
 RUN cargo chef prepare --recipe-path recipe.json
 
+# Build the Rust project using the prepared dependencies
 FROM chef as zkp-builder
 COPY ./rollup/circuitcapacitychecker/libzkp/rust-toolchain ./
 COPY --from=planner /app/recipe.json recipe.json
@@ -17,15 +19,37 @@ RUN mkdir -p .cargo && \
     echo 'registry = "git://mirrors.ustc.edu.cn/crates.io-index"' >> .cargo/config.toml
 RUN cargo chef cook --release --recipe-path recipe.json
 
+# Copy the project files and build the project
 COPY ./rollup/circuitcapacitychecker/libzkp .
 RUN cargo clean
 RUN cargo build --release
 RUN find ./ | grep libzktrie.so | xargs -I{} cp {} /app/target/release/
 
-# Build Geth in a stock Go builder container
+# Build Go dependencies
 FROM scrolltech/go-rust-builder:go-1.20-rust-nightly-2022-12-10 as builder
-
-ADD . /go-ethereum
 COPY --from=zkp-builder /app/target/release/libzkp.so /usr/local/lib/
 COPY --from=zkp-builder /app/target/release/libzktrie.so /usr/local/lib/
 ENV LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib/
+
+# Final stage: Create a clean Ubuntu image with only the necessary binaries and libraries
+FROM ubuntu:latest
+RUN apt-get update && apt-get install -y \
+    libc6-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /usr/local/lib/libzkp.so /usr/local/lib/
+COPY --from=builder /usr/local/lib/libzktrie.so /usr/local/lib/
+ENV LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib/
+
+RUN apt-get update && apt-get install -y \
+    curl \
+    git
+RUN curl -OL https://golang.org/dl/go1.18.3.linux-amd64.tar.gz \
+    && tar -xvf go1.18.3.linux-amd64.tar.gz -C /usr/local \
+    && rm go1.18.3.linux-amd64.tar.gz
+ENV GOPATH /go
+ENV PATH $GOPATH/bin:/usr/local/go/bin:$PATH
+
+# Set any environment variables, entrypoint, or default commands as needed
+WORKDIR /go-ethereum
+CMD ["/bin/bash"]

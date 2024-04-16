@@ -9,7 +9,7 @@ import (
 )
 
 func BenchmarkApplyTransaction(b *testing.B) {
-	data, err := os.ReadFile("block_trace_0xac92e50305b280808a06573888c89cde3556b79d72556c8cdfa97dc6b5695e44.json")
+	data, err := os.ReadFile("block_trace_0x084d4643046fa33e2b832d74b5fd74d4cdf04a5eb93d048e3764b5883a29060f.json")
 	if err != nil {
 		b.Fatalf("Error reading block trace file: %v", err)
 	}
