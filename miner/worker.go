@@ -93,13 +93,14 @@ var (
 	l2TxCccUnknownErrCounter          = metrics.NewRegisteredCounter("miner/skipped_txs/l2/ccc_unknown_err", nil)
 	l1TxStrangeErrCounter             = metrics.NewRegisteredCounter("miner/skipped_txs/l1/strange_err", nil)
 
-	l2CommitTxsTimer                = metrics.NewRegisteredTimer("miner/commit/txs_all", nil)
-	l2CommitTxTimer                 = metrics.NewRegisteredTimer("miner/commit/tx_all", nil)
-	l2CommitTxFailedTimer           = metrics.NewRegisteredTimer("miner/commit/tx_all_failed", nil)
-	l2CommitTxTraceTimer            = metrics.NewRegisteredTimer("miner/commit/tx_trace", nil)
-	l2CommitTxTraceStateRevertTimer = metrics.NewRegisteredTimer("miner/commit/tx_trace_state_revert", nil)
-	l2CommitTxCCCTimer              = metrics.NewRegisteredTimer("miner/commit/tx_ccc", nil)
-	l2CommitTxApplyTimer            = metrics.NewRegisteredTimer("miner/commit/tx_apply", nil)
+	l2CommitTxsTimer                     = metrics.NewRegisteredTimer("miner/commit/txs_all", nil)
+	l2CommitTxTimer                      = metrics.NewRegisteredTimer("miner/commit/tx_all", nil)
+	l2CommitTxFailedTimer                = metrics.NewRegisteredTimer("miner/commit/tx_all_failed", nil)
+	l2CommitTxTraceTimer                 = metrics.NewRegisteredTimer("miner/commit/tx_trace", nil)
+	l2CommitTxTraceStateRevertTimer      = metrics.NewRegisteredTimer("miner/commit/tx_trace_state_revert", nil)
+	l2CommitTxCCCTimer                   = metrics.NewRegisteredTimer("miner/commit/tx_ccc", nil)
+	l2CommitTxApplyTimer                 = metrics.NewRegisteredTimer("miner/commit/tx_apply", nil)
+	l2CommitTransactionsContainsTxsMeter = metrics.NewRegisteredMeter("miner/commit/tx_contains_txs", nil)
 
 	l2CommitNewWorkTimer                    = metrics.NewRegisteredTimer("miner/commit/new_work_all", nil)
 	l2CommitNewWorkL1CollectTimer           = metrics.NewRegisteredTimer("miner/commit/new_work_collect_l1", nil)
@@ -1288,6 +1289,7 @@ loop:
 			txs.Shift()
 		}
 	}
+	l2CommitTransactionsContainsTxsMeter.Mark(loops)
 
 	if !w.isRunning() && len(coalescedLogs) > 0 {
 		// We don't push the pendingLogsEvent while we are mining. The reason is that
