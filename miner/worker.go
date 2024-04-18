@@ -113,10 +113,11 @@ var (
 	l2CommitNewWorkLocalPriceAndNonceTimer  = metrics.NewRegisteredTimer("miner/commit/new_work_local_price_and_nonce", nil)
 	l2CommitNewWorkRemotePriceAndNonceTimer = metrics.NewRegisteredTimer("miner/commit/new_work_remote_price_and_nonce", nil)
 
-	l2CommitTimer      = metrics.NewRegisteredTimer("miner/commit/all", nil)
-	l2CommitTraceTimer = metrics.NewRegisteredTimer("miner/commit/trace", nil)
-	l2CommitCCCTimer   = metrics.NewRegisteredTimer("miner/commit/ccc", nil)
-	l2ResultTimer      = metrics.NewRegisteredTimer("miner/result/all", nil)
+	l2CommitTimer            = metrics.NewRegisteredTimer("miner/commit/all", nil)
+	l2CommitTraceTimer       = metrics.NewRegisteredTimer("miner/commit/trace", nil)
+	l2CommitCCCTimer         = metrics.NewRegisteredTimer("miner/commit/ccc", nil)
+	l2CommitTxsPerBlockGauge = metrics.NewRegisteredGauge("miner/commit/txs_per_block", nil)
+	l2ResultTimer            = metrics.NewRegisteredTimer("miner/result/all", nil)
 )
 
 // environment is the worker's current environment and holds all of the current state information.
@@ -1589,6 +1590,8 @@ func (w *worker) commit(uncles []*types.Header, interval func(), update bool, st
 	if err != nil {
 		return err
 	}
+	l2CommitTxsPerBlockGauge.Update(int64(len(w.current.txs)))
+
 	if w.isRunning() {
 		if interval != nil {
 			interval()
