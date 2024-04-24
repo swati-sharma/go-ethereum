@@ -70,7 +70,7 @@ type JumpTable [256]*operation
 // contantinople, istanbul, petersburg, berlin, london, shanghai, curie, and descartes instructions.
 func newDescartesInstructionSet() JumpTable {
 	instructionSet := newCurieInstructionSet()
-	enable1153(&instructionSet)
+
 	return instructionSet
 }
 
