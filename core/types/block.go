@@ -69,7 +69,7 @@ func (n *BlockNonce) UnmarshalText(input []byte) error {
 type Header struct {
 	ParentHash  common.Hash    `json:"parentHash"       gencodec:"required"`
 	UncleHash   common.Hash    `json:"sha3Uncles"       gencodec:"required"`
-	Coinbase    common.Address `json:"miner"            gencodec:"required"`
+	Coinbase    common.Address `json:"miner"`
 	Root        common.Hash    `json:"stateRoot"        gencodec:"required"`
 	TxHash      common.Hash    `json:"transactionsRoot" gencodec:"required"`
 	ReceiptHash common.Hash    `json:"receiptsRoot"     gencodec:"required"`
@@ -89,6 +89,18 @@ type Header struct {
 	// WithdrawalsHash was added by EIP-4895 and is ignored in legacy headers.
 	// Included for Ethereum compatibility in Scroll SDK
 	WithdrawalsHash *common.Hash `json:"withdrawalsRoot" rlp:"optional"`
+
+	// BlobGasUsed was added by EIP-4844 and is ignored in legacy headers.
+	// Included for Ethereum compatibility in Scroll SDK
+	BlobGasUsed *uint64 `json:"blobGasUsed" rlp:"optional"`
+
+	// ExcessBlobGas was added by EIP-4844 and is ignored in legacy headers.
+	// Included for Ethereum compatibility in Scroll SDK
+	ExcessBlobGas *uint64 `json:"excessBlobGas" rlp:"optional"`
+
+	// ParentBeaconRoot was added by EIP-4788 and is ignored in legacy headers.
+	// Included for Ethereum compatibility in Scroll SDK
+	ParentBeaconRoot *common.Hash `json:"parentBeaconBlockRoot" rlp:"optional"`
 }
 
 // field type overrides for gencodec
@@ -335,7 +347,9 @@ func (b *Block) PayloadSize() common.StorageSize {
 	// add up all txs sizes
 	var totalSize common.StorageSize
 	for _, tx := range b.transactions {
-		totalSize += tx.Size()
+		if !tx.IsL1MessageTx() {
+			totalSize += tx.Size()
+		}
 	}
 	return totalSize
 }
@@ -397,16 +411,39 @@ func (b *Block) Hash() common.Hash {
 	return v
 }
 
-// L1MessageCount returns the number of L1 messages in this block.
-func (b *Block) L1MessageCount() int {
+// ContainsL1Messages returns true if this block contains at least one L1 message.
+func (b *Block) ContainsL1Messages() bool {
+	for _, tx := range b.transactions {
+		if tx.IsL1MessageTx() {
+			return true
+		}
+	}
+	return false
+}
+
+// NumL1MessagesProcessed returns the number of L1 messages processed in this block.
+// This count includes both skipped and included messages.
+// `firstQueueIndex` is the first queue index available for this block to process.
+func (b *Block) NumL1MessagesProcessed(firstQueueIndex uint64) int {
 	if l1MsgCount := b.l1MsgCount.Load(); l1MsgCount != nil {
 		return l1MsgCount.(int)
 	}
-	count := 0
-	for _, tx := range b.transactions {
-		if tx.IsL1MessageTx() {
-			count += 1
+
+	// find first and last queue index in block
+	var lastQueueIndex *uint64
+
+	for ii, tx := range b.transactions {
+		if !tx.IsL1MessageTx() {
+			break
 		}
+		lastQueueIndex = &b.transactions[ii].AsL1MessageTx().QueueIndex
+	}
+
+	// calculate and cache L1 message count
+	count := 0
+	if lastQueueIndex != nil {
+		// lastQueueIndex is guaranteed to be non-nil in this case
+		count = int(*lastQueueIndex - firstQueueIndex + 1)
 	}
 	b.l1MsgCount.Store(count)
 	return count
@@ -414,7 +451,18 @@ func (b *Block) L1MessageCount() int {
 
 // CountL2Tx returns the number of L2 transactions in this block.
 func (b *Block) CountL2Tx() int {
-	return len(b.transactions) - b.L1MessageCount()
+	count := 0
+	for _, tx := range b.transactions {
+		if !tx.IsL1MessageTx() {
+			count += 1
+		}
+	}
+	return count
 }
 
 type Blocks []*Block
+
+type BlockWithRowConsumption struct {
+	*Block
+	*RowConsumption
+}

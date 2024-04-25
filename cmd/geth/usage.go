@@ -48,6 +48,8 @@ var AppHelpFlagGroups = []flags.FlagGroup{
 			utils.RopstenFlag,
 			utils.SepoliaFlag,
 			utils.ScrollAlphaFlag,
+			utils.ScrollSepoliaFlag,
+			utils.ScrollFlag,
 			utils.SyncModeFlag,
 			utils.ExitWhenSyncedFlag,
 			utils.GCModeFlag,
@@ -191,6 +193,7 @@ var AppHelpFlagGroups = []flags.FlagGroup{
 			utils.MinerExtraDataFlag,
 			utils.MinerRecommitIntervalFlag,
 			utils.MinerNoVerifyFlag,
+			utils.MinerStoreSkippedTxTracesFlag,
 		},
 	},
 	{

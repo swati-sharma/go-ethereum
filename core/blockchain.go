@@ -53,6 +53,9 @@ var (
 	headBlockGauge     = metrics.NewRegisteredGauge("chain/head/block", nil)
 	headHeaderGauge    = metrics.NewRegisteredGauge("chain/head/header", nil)
 	headFastBlockGauge = metrics.NewRegisteredGauge("chain/head/receipt", nil)
+	headTimeGapGauge   = metrics.NewRegisteredGauge("chain/head/timegap", nil)
+
+	l2BaseFeeGauge = metrics.NewRegisteredGauge("chain/fees/l2basefee", nil)
 
 	accountReadTimer   = metrics.NewRegisteredTimer("chain/account/reads", nil)
 	accountHashTimer   = metrics.NewRegisteredTimer("chain/account/hashes", nil)
@@ -1182,10 +1185,33 @@ func (bc *BlockChain) writeBlockWithoutState(block *types.Block, td *big.Int) (e
 	rawdb.WriteBlock(batch, block)
 
 	queueIndex := rawdb.ReadFirstQueueIndexNotInL2Block(bc.db, block.ParentHash())
+
+	// note: we can insert blocks with header-only ancestors here,
+	// so queueIndex might not yet be available in DB.
 	if queueIndex != nil {
-		// note: we can insert blocks with header-only ancestors here,
-		// so queueIndex might not yet be available in DB.
-		rawdb.WriteFirstQueueIndexNotInL2Block(batch, block.Hash(), *queueIndex+uint64(block.L1MessageCount()))
+		numProcessed := uint64(block.NumL1MessagesProcessed(*queueIndex))
+		// do not overwrite the index written by the miner worker
+		if index := rawdb.ReadFirstQueueIndexNotInL2Block(bc.db, block.Hash()); index == nil {
+			newIndex := *queueIndex + numProcessed
+			log.Trace(
+				"Blockchain.writeBlockWithoutState WriteFirstQueueIndexNotInL2Block",
+				"number", block.Number(),
+				"hash", block.Hash().String(),
+				"queueIndex", *queueIndex,
+				"numProcessed", numProcessed,
+				"newIndex", newIndex,
+			)
+			rawdb.WriteFirstQueueIndexNotInL2Block(batch, block.Hash(), newIndex)
+		} else {
+			log.Trace(
+				"Blockchain.writeBlockWithoutState WriteFirstQueueIndexNotInL2Block: not overwriting existing index",
+				"number", block.Number(),
+				"hash", block.Hash().String(),
+				"queueIndex", *queueIndex,
+				"numProcessed", numProcessed,
+				"index", *index,
+			)
+		}
 	}
 
 	if err := batch.Write(); err != nil {
@@ -1223,6 +1249,19 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		return NonStatTy, errInsertionInterrupted
 	}
 
+	// Note latest seen L2 base fee
+	if block.BaseFee() != nil {
+		l2BaseFeeGauge.Update(block.BaseFee().Int64())
+	} else {
+		l2BaseFeeGauge.Update(0)
+	}
+
+	parent := bc.GetHeaderByHash(block.ParentHash())
+	// block.Time is guaranteed to be larger than parent.Time,
+	// and the time gap should fit into int64.
+	gap := int64(block.Time() - parent.Time)
+	headTimeGapGauge.Update(gap)
+
 	// Calculate the total difficulty of the block
 	ptd := bc.GetTd(block.ParentHash(), block.NumberU64()-1)
 	if ptd == nil {
@@ -1249,7 +1288,29 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		// so the parent will always be inserted first.
 		log.Crit("Queue index in DB is nil", "parent", block.ParentHash(), "hash", block.Hash())
 	}
-	rawdb.WriteFirstQueueIndexNotInL2Block(blockBatch, block.Hash(), *queueIndex+uint64(block.L1MessageCount()))
+	numProcessed := uint64(block.NumL1MessagesProcessed(*queueIndex))
+	// do not overwrite the index written by the miner worker
+	if index := rawdb.ReadFirstQueueIndexNotInL2Block(bc.db, block.Hash()); index == nil {
+		newIndex := *queueIndex + numProcessed
+		log.Trace(
+			"Blockchain.writeBlockWithState WriteFirstQueueIndexNotInL2Block",
+			"number", block.Number(),
+			"hash", block.Hash().String(),
+			"queueIndex", *queueIndex,
+			"numProcessed", numProcessed,
+			"newIndex", newIndex,
+		)
+		rawdb.WriteFirstQueueIndexNotInL2Block(blockBatch, block.Hash(), newIndex)
+	} else {
+		log.Trace(
+			"Blockchain.writeBlockWithState WriteFirstQueueIndexNotInL2Block: not overwriting existing index",
+			"number", block.Number(),
+			"hash", block.Hash().String(),
+			"queueIndex", *queueIndex,
+			"numProcessed", numProcessed,
+			"index", *index,
+		)
+	}
 
 	if err := blockBatch.Write(); err != nil {
 		log.Crit("Failed to write block into disk", "err", err)

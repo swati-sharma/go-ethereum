@@ -17,14 +17,29 @@
 package core
 
 import (
+	"errors"
 	"fmt"
+	"sync"
+	"time"
 
 	"github.com/scroll-tech/go-ethereum/consensus"
 	"github.com/scroll-tech/go-ethereum/core/rawdb"
 	"github.com/scroll-tech/go-ethereum/core/state"
 	"github.com/scroll-tech/go-ethereum/core/types"
+	"github.com/scroll-tech/go-ethereum/ethdb"
+	"github.com/scroll-tech/go-ethereum/log"
+	"github.com/scroll-tech/go-ethereum/metrics"
 	"github.com/scroll-tech/go-ethereum/params"
+	"github.com/scroll-tech/go-ethereum/rollup/circuitcapacitychecker"
 	"github.com/scroll-tech/go-ethereum/trie"
+)
+
+var (
+	validateL1MessagesTimer     = metrics.NewRegisteredTimer("validator/l1msg", nil)
+	validateRowConsumptionTimer = metrics.NewRegisteredTimer("validator/rowconsumption", nil)
+	validateTraceTimer          = metrics.NewRegisteredTimer("validator/trace", nil)
+	validateLockTimer           = metrics.NewRegisteredTimer("validator/lock", nil)
+	validateCccTimer            = metrics.NewRegisteredTimer("validator/ccc", nil)
 )
 
 // BlockValidator is responsible for validating block headers, uncles and
@@ -35,6 +50,12 @@ type BlockValidator struct {
 	config *params.ChainConfig // Chain configuration options
 	bc     *BlockChain         // Canonical block chain
 	engine consensus.Engine    // Consensus engine used for validating
+
+	// circuit capacity checker related fields
+	checkCircuitCapacity   bool                                           // whether enable circuit capacity check
+	cMu                    sync.Mutex                                     // mutex for circuit capacity checker
+	tracer                 tracerWrapper                                  // scroll tracer wrapper
+	circuitCapacityChecker *circuitcapacitychecker.CircuitCapacityChecker // circuit capacity checker instance
 }
 
 // NewBlockValidator returns a new block validator which is safe for re-use
@@ -47,6 +68,17 @@ func NewBlockValidator(config *params.ChainConfig, blockchain *BlockChain, engin
 	return validator
 }
 
+type tracerWrapper interface {
+	CreateTraceEnvAndGetBlockTrace(*params.ChainConfig, ChainContext, consensus.Engine, ethdb.Database, *state.StateDB, *types.Block, *types.Block, bool) (*types.BlockTrace, error)
+}
+
+func (v *BlockValidator) SetupTracerAndCircuitCapacityChecker(tracer tracerWrapper) {
+	v.checkCircuitCapacity = true
+	v.tracer = tracer
+	v.circuitCapacityChecker = circuitcapacitychecker.NewCircuitCapacityChecker(true)
+	log.Info("new CircuitCapacityChecker in BlockValidator", "ID", v.circuitCapacityChecker.ID)
+}
+
 // ValidateBody validates the given block's uncles and verifies the block
 // header's transaction and uncle roots. The headers are assumed to be already
 // validated at this point.
@@ -55,7 +87,7 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 	if v.bc.HasBlockAndState(block.Hash(), block.NumberU64()) {
 		return ErrKnownBlock
 	}
-	if !v.config.Scroll.IsValidL2TxCount(block.CountL2Tx()) {
+	if !v.config.Scroll.IsValidTxCount(len(block.Transactions())) {
 		return consensus.ErrInvalidTxCount
 	}
 	// Check if block payload size is smaller than the max size
@@ -79,20 +111,49 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 		}
 		return consensus.ErrPrunedAncestor
 	}
-	return v.ValidateL1Messages(block)
+	if err := v.ValidateL1Messages(block); err != nil {
+		return err
+	}
+	if v.checkCircuitCapacity {
+		// if a block's RowConsumption has been stored, which means it has been processed before,
+		// (e.g., in miner/worker.go or in insertChain),
+		// we simply skip its calculation and validation
+		if rawdb.ReadBlockRowConsumption(v.bc.db, block.Hash()) != nil {
+			return nil
+		}
+		rowConsumption, err := v.validateCircuitRowConsumption(block)
+		if err != nil {
+			return err
+		}
+		log.Trace(
+			"Validator write block row consumption",
+			"id", v.circuitCapacityChecker.ID,
+			"number", block.NumberU64(),
+			"hash", block.Hash().String(),
+			"rowConsumption", rowConsumption,
+		)
+		rawdb.WriteBlockRowConsumption(v.bc.db, block.Hash(), rowConsumption)
+	}
+	return nil
 }
 
 // ValidateL1Messages validates L1 messages contained in a block.
 // We check the following conditions:
 // - L1 messages are in a contiguous section at the front of the block.
 // - The first L1 message's QueueIndex is right after the last L1 message included in the chain.
-// - L1 messages follow the QueueIndex order. No L1 message is skipped.
+// - L1 messages follow the QueueIndex order.
 // - The L1 messages included in the block match the node's view of the L1 ledger.
 func (v *BlockValidator) ValidateL1Messages(block *types.Block) error {
-	// no further processing if the block contains no L1 messages
-	if block.L1MessageCount() == 0 {
+	defer func(t0 time.Time) {
+		validateL1MessagesTimer.Update(time.Since(t0))
+	}(time.Now())
+
+	// skip DB read if the block contains no L1 messages
+	if !block.ContainsL1Messages() {
 		return nil
 	}
+
+	blockHash := block.Hash()
 
 	if v.config.Scroll.L1Config == nil {
 		// TODO: should we allow follower nodes to skip L1 message verification?
@@ -120,16 +181,39 @@ func (v *BlockValidator) ValidateL1Messages(block *types.Block) error {
 			return consensus.ErrInvalidL1MessageOrder
 		}
 
-		// check queue index
-		// TODO: account for skipped messages here
-		if tx.AsL1MessageTx().QueueIndex != queueIndex {
+		// queue index cannot decrease
+		txQueueIndex := tx.AsL1MessageTx().QueueIndex
+
+		if txQueueIndex < queueIndex {
 			return consensus.ErrInvalidL1MessageOrder
 		}
 
-		queueIndex += 1
+		// skipped messages
+		// TODO: consider verifying that skipped messages overflow
+		for index := queueIndex; index < txQueueIndex; index++ {
+			if exists := it.Next(); !exists {
+				if err := it.Error(); err != nil {
+					log.Error("Unexpected DB error in ValidateL1Messages", "err", err, "queueIndex", queueIndex)
+				}
+				// the message in this block is not available in our local db.
+				// we'll reprocess this block at a later time.
+				return consensus.ErrMissingL1MessageData
+			}
+
+			l1msg := it.L1Message()
+			skippedTx := types.NewTx(&l1msg)
+			log.Debug("Skipped L1 message", "queueIndex", index, "tx", skippedTx.Hash().String(), "block", blockHash.String())
+			rawdb.WriteSkippedTransaction(v.bc.db, skippedTx, nil, "unknown", block.NumberU64(), &blockHash)
+		}
+
+		queueIndex = txQueueIndex + 1
 
 		if exists := it.Next(); !exists {
-			// we'll reprocess this block at a later time
+			if err := it.Error(); err != nil {
+				log.Error("Unexpected DB error in ValidateL1Messages", "err", err, "queueIndex", txQueueIndex)
+			}
+			// the message in this block is not available in our local db.
+			// we'll reprocess this block at a later time.
 			return consensus.ErrMissingL1MessageData
 		}
 
@@ -201,4 +285,62 @@ func CalcGasLimit(parentGasLimit, desiredLimit uint64) uint64 {
 		}
 	}
 	return limit
+}
+
+func (v *BlockValidator) createTraceEnvAndGetBlockTrace(block *types.Block) (*types.BlockTrace, error) {
+	parent := v.bc.GetBlock(block.ParentHash(), block.NumberU64()-1)
+	if parent == nil {
+		return nil, errors.New("validateCircuitRowConsumption: no parent block found")
+	}
+
+	statedb, err := v.bc.StateAt(parent.Root())
+	if err != nil {
+		return nil, err
+	}
+
+	return v.tracer.CreateTraceEnvAndGetBlockTrace(v.config, v.bc, v.engine, v.bc.db, statedb, parent, block, true)
+}
+
+func (v *BlockValidator) validateCircuitRowConsumption(block *types.Block) (*types.RowConsumption, error) {
+	defer func(t0 time.Time) {
+		validateRowConsumptionTimer.Update(time.Since(t0))
+	}(time.Now())
+
+	log.Trace(
+		"Validator apply ccc for block",
+		"id", v.circuitCapacityChecker.ID,
+		"number", block.NumberU64(),
+		"hash", block.Hash().String(),
+		"len(txs)", block.Transactions().Len(),
+	)
+
+	traceStartTime := time.Now()
+	traces, err := v.createTraceEnvAndGetBlockTrace(block)
+	if err != nil {
+		return nil, err
+	}
+	validateTraceTimer.Update(time.Since(traceStartTime))
+
+	lockStartTime := time.Now()
+	v.cMu.Lock()
+	defer v.cMu.Unlock()
+	validateLockTimer.Update(time.Since(lockStartTime))
+
+	cccStartTime := time.Now()
+	v.circuitCapacityChecker.Reset()
+	log.Trace("Validator reset ccc", "id", v.circuitCapacityChecker.ID)
+	rc, err := v.circuitCapacityChecker.ApplyBlock(traces)
+	validateCccTimer.Update(time.Since(cccStartTime))
+
+	log.Trace(
+		"Validator apply ccc for block result",
+		"id", v.circuitCapacityChecker.ID,
+		"number", block.NumberU64(),
+		"hash", block.Hash().String(),
+		"len(txs)", block.Transactions().Len(),
+		"rc", rc,
+		"err", err,
+	)
+
+	return rc, err
 }

@@ -31,6 +31,7 @@ import (
 	"github.com/scroll-tech/go-ethereum/common/hexutil"
 	"github.com/scroll-tech/go-ethereum/common/math"
 	"github.com/scroll-tech/go-ethereum/core/types"
+	"github.com/scroll-tech/go-ethereum/crypto"
 	"github.com/scroll-tech/go-ethereum/log"
 	"github.com/scroll-tech/go-ethereum/params"
 )
@@ -233,16 +234,14 @@ func (l *StructLogger) CaptureState(pc uint64, op OpCode, gas, cost uint64, scop
 		storageKey          common.Hash
 		storageValue        common.Hash
 	)
-	if !l.cfg.DisableStorage {
-		if op == SLOAD && stack.len() >= 1 {
-			recordStorageDetail = true
-			storageKey = stack.data[stack.len()-1].Bytes32()
-			storageValue = l.env.StateDB.GetState(contract.Address(), storageKey)
-		} else if op == SSTORE && stack.len() >= 2 {
-			recordStorageDetail = true
-			storageKey = stack.data[stack.len()-1].Bytes32()
-			storageValue = stack.data[stack.len()-2].Bytes32()
-		}
+	if op == SLOAD && stack.len() >= 1 {
+		recordStorageDetail = true
+		storageKey = stack.data[stack.len()-1].Bytes32()
+		storageValue = l.env.StateDB.GetState(contract.Address(), storageKey)
+	} else if op == SSTORE && stack.len() >= 2 {
+		recordStorageDetail = true
+		storageKey = stack.data[stack.len()-1].Bytes32()
+		storageValue = stack.data[stack.len()-2].Bytes32()
 	}
 	if recordStorageDetail {
 		contractAddress := contract.Address()
@@ -250,7 +249,9 @@ func (l *StructLogger) CaptureState(pc uint64, op OpCode, gas, cost uint64, scop
 			l.storage[contractAddress] = make(Storage)
 		}
 		l.storage[contractAddress][storageKey] = storageValue
-		structLog.Storage = l.storage[contractAddress].Copy()
+		if !l.cfg.DisableStorage {
+			structLog.Storage = l.storage[contractAddress].Copy()
+		}
 
 		if err := traceStorage(l, scope, structLog.getOrInitExtraData()); err != nil {
 			log.Error("Failed to trace data", "opcode", op.String(), "err", err)
@@ -273,6 +274,29 @@ func (l *StructLogger) CaptureState(pc uint64, op OpCode, gas, cost uint64, scop
 	case CALL, CALLCODE, STATICCALL, DELEGATECALL, CREATE, CREATE2:
 		extraData := structLog.getOrInitExtraData()
 		extraData.Caller = append(extraData.Caller, getWrappedAccountForAddr(l, scope.Contract.Address()))
+	}
+
+	// in reality it is impossible for CREATE to trigger ErrContractAddressCollision
+	if op == CREATE2 && opErr == nil {
+		_ = stack.data[stack.len()-1] // value
+		offset := stack.data[stack.len()-2]
+		size := stack.data[stack.len()-3]
+		salt := stack.data[stack.len()-4]
+		// `CaptureState` is called **before** memory resizing
+		// So sometimes we need to auto pad 0.
+		code := getData(scope.Memory.Data(), offset.Uint64(), size.Uint64())
+
+		codeAndHash := &codeAndHash{code: code}
+
+		address := crypto.CreateAddress2(contract.Address(), salt.Bytes32(), codeAndHash.Hash().Bytes())
+
+		contractHash := l.env.StateDB.GetKeccakCodeHash(address)
+		if l.env.StateDB.GetNonce(address) != 0 || (contractHash != (common.Hash{}) && contractHash != emptyKeccakCodeHash) {
+			extraData := structLog.getOrInitExtraData()
+			wrappedStatus := getWrappedAccountForAddr(l, address)
+			extraData.StateList = append(extraData.StateList, wrappedStatus)
+			l.statesAffected[address] = struct{}{}
+		}
 	}
 
 	structLog.RefundCounter = l.env.StateDB.GetRefund()

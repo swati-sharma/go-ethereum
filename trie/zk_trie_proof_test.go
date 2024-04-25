@@ -79,7 +79,11 @@ func TestSMTOneElementProof(t *testing.T) {
 		if proof.Len() != 2 {
 			t.Errorf("prover %d: proof should have 1+1 element (including the magic kv)", i)
 		}
-		val, err := VerifyProof(common.BytesToHash(mt.Root().Bytes()), keyBytes, proof)
+
+		root, err := mt.Root()
+		assert.NoError(t, err)
+
+		val, err := VerifyProof(common.BytesToHash(root.Bytes()), keyBytes, proof)
 		if err != nil {
 			t.Fatalf("prover %d: failed to verify proof: %v\nraw proof: %x", i, err, proof)
 		}
@@ -91,7 +95,9 @@ func TestSMTOneElementProof(t *testing.T) {
 
 func TestSMTProof(t *testing.T) {
 	mt, vals := randomZktrie(t, 500)
-	root := mt.Tree().Root()
+	root, err := mt.Tree().Root()
+	assert.NoError(t, err)
+
 	for i, prover := range makeSMTProvers(mt) {
 		for _, kv := range vals {
 			proof := prover(kv.k)
@@ -111,7 +117,9 @@ func TestSMTProof(t *testing.T) {
 
 func TestSMTBadProof(t *testing.T) {
 	mt, vals := randomZktrie(t, 500)
-	root := mt.Tree().Root()
+	root, err := mt.Tree().Root()
+	assert.NoError(t, err)
+
 	for i, prover := range makeSMTProvers(mt) {
 		for _, kv := range vals {
 			proof := prover(kv.k)
@@ -157,7 +165,11 @@ func TestSMTMissingKeyProof(t *testing.T) {
 		if proof.Len() != 2 {
 			t.Errorf("test %d: proof should have 2 element (with magic kv)", i)
 		}
-		val, err := VerifyProof(common.BytesToHash(mt.Root().Bytes()), keyBytes, proof)
+
+		root, err := mt.Root()
+		assert.NoError(t, err)
+
+		val, err := VerifyProof(common.BytesToHash(root.Bytes()), keyBytes, proof)
 		if err != nil {
 			t.Fatalf("test %d: failed to verify proof: %v\nraw proof: %x", i, err, proof)
 		}
@@ -200,7 +212,7 @@ func randomZktrie(t *testing.T, n int) (*ZkTrie, map[string]*kv) {
 func TestProofWithDeletion(t *testing.T) {
 	tr, _ := NewZkTrie(common.Hash{}, NewZktrieDatabase((memorydb.New())))
 	mt := &zkTrieImplTestWrapper{tr.Tree()}
-	key1 := bytes.Repeat([]byte("k"), 32)
+	key1 := bytes.Repeat([]byte("l"), 32)
 	key2 := bytes.Repeat([]byte("m"), 32)
 	err := mt.UpdateWord(
 		zkt.NewByte32FromBytesPaddingZero(key1),
@@ -229,7 +241,7 @@ func TestProofWithDeletion(t *testing.T) {
 
 	err = proofTracer.Prove(s_key2.Bytes(), 0, proof)
 	assert.NoError(t, err)
-	// assert.Equal(t, len(sibling1), len(delTracer.GetProofs()))
+	//assert.Equal(t, len(sibling1), len(delTracer.GetProofs()))
 
 	siblings, err := proofTracer.GetDeletionProofs()
 	assert.NoError(t, err)

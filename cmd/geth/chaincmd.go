@@ -71,6 +71,8 @@ It expects the genesis file as argument.`,
 			utils.RinkebyFlag,
 			utils.GoerliFlag,
 			utils.ScrollAlphaFlag,
+			utils.ScrollSepoliaFlag,
+			utils.ScrollFlag,
 		},
 		Category: "BLOCKCHAIN COMMANDS",
 		Description: `

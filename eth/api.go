@@ -19,6 +19,7 @@ package eth
 import (
 	"compress/gzip"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -670,4 +671,149 @@ func (api *ScrollAPI) GetLatestRelayedQueueIndex(ctx context.Context) (queueInde
 	}
 	lastIncluded := *queueIndex - 1
 	return &lastIncluded, nil
+}
+
+// rpcMarshalBlock uses the generalized output filler, then adds the total difficulty field, which requires
+// a `ScrollAPI`.
+func (api *ScrollAPI) rpcMarshalBlock(ctx context.Context, b *types.Block, fullTx bool) (map[string]interface{}, error) {
+	fields, err := ethapi.RPCMarshalBlock(b, true, fullTx, api.eth.APIBackend.ChainConfig())
+	if err != nil {
+		return nil, err
+	}
+	fields["totalDifficulty"] = (*hexutil.Big)(api.eth.APIBackend.GetTd(ctx, b.Hash()))
+	rc := rawdb.ReadBlockRowConsumption(api.eth.ChainDb(), b.Hash())
+	if rc != nil {
+		fields["rowConsumption"] = rc
+	} else {
+		fields["rowConsumption"] = nil
+	}
+	return fields, err
+}
+
+// GetBlockByHash returns the requested block. When fullTx is true all transactions in the block are returned in full
+// detail, otherwise only the transaction hash is returned.
+func (api *ScrollAPI) GetBlockByHash(ctx context.Context, hash common.Hash, fullTx bool) (map[string]interface{}, error) {
+	block, err := api.eth.APIBackend.BlockByHash(ctx, hash)
+	if block != nil {
+		return api.rpcMarshalBlock(ctx, block, fullTx)
+	}
+	return nil, err
+}
+
+// GetBlockByNumber returns the requested block. When fullTx is true all transactions in the block are returned in full
+// detail, otherwise only the transaction hash is returned.
+func (api *ScrollAPI) GetBlockByNumber(ctx context.Context, number rpc.BlockNumber, fullTx bool) (map[string]interface{}, error) {
+	block, err := api.eth.APIBackend.BlockByNumber(ctx, number)
+	if block != nil {
+		return api.rpcMarshalBlock(ctx, block, fullTx)
+	}
+	return nil, err
+}
+
+// GetNumSkippedTransactions returns the number of skipped transactions.
+func (api *ScrollAPI) GetNumSkippedTransactions(ctx context.Context) (uint64, error) {
+	return rawdb.ReadNumSkippedTransactions(api.eth.ChainDb()), nil
+}
+
+// SyncStatus includes L2 block sync height, L1 rollup sync height,
+// L1 message sync height, and L2 finalized block height.
+type SyncStatus struct {
+	L2BlockSyncHeight      uint64 `json:"l2BlockSyncHeight,omitempty"`
+	L1RollupSyncHeight     uint64 `json:"l1RollupSyncHeight,omitempty"`
+	L1MessageSyncHeight    uint64 `json:"l1MessageSyncHeight,omitempty"`
+	L2FinalizedBlockHeight uint64 `json:"l2FinalizedBlockHeight,omitempty"`
+}
+
+// SyncStatus returns the overall rollup status including L2 block sync height, L1 rollup sync height,
+// L1 message sync height, and L2 finalized block height.
+func (api *ScrollAPI) SyncStatus(_ context.Context) *SyncStatus {
+	status := &SyncStatus{}
+
+	l2BlockHeader := api.eth.blockchain.CurrentHeader()
+	if l2BlockHeader != nil {
+		status.L2BlockSyncHeight = l2BlockHeader.Number.Uint64()
+	}
+
+	l1RollupSyncHeightPtr := rawdb.ReadRollupEventSyncedL1BlockNumber(api.eth.ChainDb())
+	if l1RollupSyncHeightPtr != nil {
+		status.L1RollupSyncHeight = *l1RollupSyncHeightPtr
+	}
+
+	l1MessageSyncHeightPtr := rawdb.ReadSyncedL1BlockNumber(api.eth.ChainDb())
+	if l1MessageSyncHeightPtr != nil {
+		status.L1MessageSyncHeight = *l1MessageSyncHeightPtr
+	}
+
+	l2FinalizedBlockHeightPtr := rawdb.ReadFinalizedL2BlockNumber(api.eth.ChainDb())
+	if l2FinalizedBlockHeightPtr != nil {
+		status.L2FinalizedBlockHeight = *l2FinalizedBlockHeightPtr
+	}
+
+	return status
+}
+
+// EstimateL1DataFee returns an estimate of the L1 data fee required to
+// process the given transaction against the current pending block.
+func (api *ScrollAPI) EstimateL1DataFee(ctx context.Context, args ethapi.TransactionArgs, blockNrOrHash *rpc.BlockNumberOrHash) (*hexutil.Uint64, error) {
+	bNrOrHash := rpc.BlockNumberOrHashWithNumber(rpc.PendingBlockNumber)
+	if blockNrOrHash != nil {
+		bNrOrHash = *blockNrOrHash
+	}
+
+	l1DataFee, err := ethapi.EstimateL1MsgFee(ctx, api.eth.APIBackend, args, bNrOrHash, nil, 0, api.eth.APIBackend.RPCGasCap(), api.eth.APIBackend.ChainConfig())
+	if err != nil {
+		return nil, fmt.Errorf("failed to estimate L1 data fee: %w", err)
+	}
+
+	result := hexutil.Uint64(l1DataFee.Uint64())
+	return &result, nil
+}
+
+// RPCTransaction is the standard RPC transaction return type with some additional skip-related fields.
+type RPCTransaction struct {
+	ethapi.RPCTransaction
+	SkipReason      string       `json:"skipReason"`
+	SkipBlockNumber *hexutil.Big `json:"skipBlockNumber"`
+	SkipBlockHash   *common.Hash `json:"skipBlockHash,omitempty"`
+
+	// wrapped traces, currently only available for `scroll_getSkippedTransaction` API, when `MinerStoreSkippedTxTracesFlag` is set
+	Traces *types.BlockTrace `json:"traces,omitempty"`
+}
+
+// GetSkippedTransaction returns a skipped transaction by its hash.
+func (api *ScrollAPI) GetSkippedTransaction(ctx context.Context, hash common.Hash) (*RPCTransaction, error) {
+	stx := rawdb.ReadSkippedTransaction(api.eth.ChainDb(), hash)
+	if stx == nil {
+		return nil, nil
+	}
+	var rpcTx RPCTransaction
+	rpcTx.RPCTransaction = *ethapi.NewRPCTransaction(stx.Tx, common.Hash{}, 0, 0, nil, api.eth.blockchain.Config())
+	rpcTx.SkipReason = stx.Reason
+	rpcTx.SkipBlockNumber = (*hexutil.Big)(new(big.Int).SetUint64(stx.BlockNumber))
+	rpcTx.SkipBlockHash = stx.BlockHash
+	if len(stx.TracesBytes) != 0 {
+		traces := &types.BlockTrace{}
+		if err := json.Unmarshal(stx.TracesBytes, traces); err != nil {
+			return nil, fmt.Errorf("fail to Unmarshal traces for skipped tx, hash: %s, err: %w", hash.String(), err)
+		}
+		rpcTx.Traces = traces
+	}
+	return &rpcTx, nil
+}
+
+// GetSkippedTransactionHashes returns a list of skipped transaction hashes between the two indices provided (inclusive).
+func (api *ScrollAPI) GetSkippedTransactionHashes(ctx context.Context, from uint64, to uint64) ([]common.Hash, error) {
+	it := rawdb.IterateSkippedTransactionsFrom(api.eth.ChainDb(), from)
+	defer it.Release()
+
+	var hashes []common.Hash
+
+	for it.Next() {
+		if it.Index() > to {
+			break
+		}
+		hashes = append(hashes, it.TransactionHash())
+	}
+
+	return hashes, nil
 }

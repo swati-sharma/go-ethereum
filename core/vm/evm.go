@@ -46,6 +46,8 @@ type (
 func (evm *EVM) precompile(addr common.Address) (PrecompiledContract, bool) {
 	var precompiles map[common.Address]PrecompiledContract
 	switch {
+	case evm.chainRules.IsBernoulli:
+		precompiles = PrecompiledContractsBernoulli
 	case evm.chainRules.IsArchimedes:
 		precompiles = PrecompiledContractsArchimedes
 	case evm.chainRules.IsBerlin:
@@ -537,9 +539,5 @@ func (evm *EVM) ChainConfig() *params.ChainConfig { return evm.chainConfig }
 
 // FeeRecipient returns the environment's transaction fee recipient address.
 func (evm *EVM) FeeRecipient() common.Address {
-	if evm.ChainConfig().Scroll.FeeVaultEnabled() {
-		return *evm.chainConfig.Scroll.FeeVaultAddress
-	} else {
-		return evm.Context.Coinbase
-	}
+	return evm.Context.Coinbase
 }

@@ -35,7 +35,8 @@ import (
 )
 
 var (
-	errPrecompileDisabled = errors.New("sha256, ripemd160, blake2f precompiles temporarily disabled")
+	errPrecompileDisabled     = errors.New("sha256, ripemd160, blake2f precompiles temporarily disabled")
+	errModexpUnsupportedInput = errors.New("modexp temporarily only accepts inputs of 32 bytes (256 bits) or less")
 )
 
 // PrecompiledContract is the basic interface for native Go contracts. The implementation
@@ -110,6 +111,20 @@ var PrecompiledContractsArchimedes = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{9}): &blake2FDisabled{},
 }
 
+// PrecompiledContractsBernoulli contains the default set of pre-compiled Ethereum
+// contracts used in the Bernoulli release. Same as Archimedes but with sha256hash enabled again
+var PrecompiledContractsBernoulli = map[common.Address]PrecompiledContract{
+	common.BytesToAddress([]byte{1}): &ecrecover{},
+	common.BytesToAddress([]byte{2}): &sha256hash{},
+	common.BytesToAddress([]byte{3}): &ripemd160hashDisabled{},
+	common.BytesToAddress([]byte{4}): &dataCopy{},
+	common.BytesToAddress([]byte{5}): &bigModExp{eip2565: true},
+	common.BytesToAddress([]byte{6}): &bn256AddIstanbul{},
+	common.BytesToAddress([]byte{7}): &bn256ScalarMulIstanbul{},
+	common.BytesToAddress([]byte{8}): &bn256PairingIstanbul{},
+	common.BytesToAddress([]byte{9}): &blake2FDisabled{},
+}
+
 // PrecompiledContractsBLS contains the set of pre-compiled Ethereum
 // contracts specified in EIP-2537. These are exported for testing purposes.
 var PrecompiledContractsBLS = map[common.Address]PrecompiledContract{
@@ -125,6 +140,7 @@ var PrecompiledContractsBLS = map[common.Address]PrecompiledContract{
 }
 
 var (
+	PrecompiledAddressesBernoulli  []common.Address
 	PrecompiledAddressesArchimedes []common.Address
 	PrecompiledAddressesBerlin     []common.Address
 	PrecompiledAddressesIstanbul   []common.Address
@@ -148,11 +164,16 @@ func init() {
 	for k := range PrecompiledContractsArchimedes {
 		PrecompiledAddressesArchimedes = append(PrecompiledAddressesArchimedes, k)
 	}
+	for k := range PrecompiledContractsBernoulli {
+		PrecompiledAddressesBernoulli = append(PrecompiledAddressesBernoulli, k)
+	}
 }
 
 // ActivePrecompiles returns the precompiles enabled with the current configuration.
 func ActivePrecompiles(rules params.Rules) []common.Address {
 	switch {
+	case rules.IsBernoulli:
+		return PrecompiledAddressesBernoulli
 	case rules.IsArchimedes:
 		return PrecompiledAddressesArchimedes
 	case rules.IsBerlin:
@@ -308,9 +329,10 @@ var (
 // modexpMultComplexity implements bigModexp multComplexity formula, as defined in EIP-198
 //
 // def mult_complexity(x):
-//    if x <= 64: return x ** 2
-//    elif x <= 1024: return x ** 2 // 4 + 96 * x - 3072
-//    else: return x ** 2 // 16 + 480 * x - 199680
+//
+//	if x <= 64: return x ** 2
+//	elif x <= 1024: return x ** 2 // 4 + 96 * x - 3072
+//	else: return x ** 2 // 16 + 480 * x - 199680
 //
 // where is x is max(length_of_MODULUS, length_of_BASE)
 func modexpMultComplexity(x *big.Int) *big.Int {
@@ -406,10 +428,20 @@ func (c *bigModExp) RequiredGas(input []byte) uint64 {
 
 func (c *bigModExp) Run(input []byte) ([]byte, error) {
 	var (
-		baseLen = new(big.Int).SetBytes(getData(input, 0, 32)).Uint64()
-		expLen  = new(big.Int).SetBytes(getData(input, 32, 32)).Uint64()
-		modLen  = new(big.Int).SetBytes(getData(input, 64, 32)).Uint64()
+		baseLenBigInt = new(big.Int).SetBytes(getData(input, 0, 32))
+		expLenBigInt  = new(big.Int).SetBytes(getData(input, 32, 32))
+		modLenBigInt  = new(big.Int).SetBytes(getData(input, 64, 32))
 	)
+	var (
+		baseLen = baseLenBigInt.Uint64()
+		expLen  = expLenBigInt.Uint64()
+		modLen  = modLenBigInt.Uint64()
+	)
+	// Check that all inputs are `u256` (32 - bytes) or less, revert otherwise
+	var lenLimit = new(big.Int).SetInt64(32)
+	if baseLenBigInt.Cmp(lenLimit) > 0 || expLenBigInt.Cmp(lenLimit) > 0 || modLenBigInt.Cmp(lenLimit) > 0 {
+		return nil, errModexpUnsupportedInput
+	}
 	if len(input) > 96 {
 		input = input[96:]
 	} else {
@@ -546,6 +578,10 @@ var (
 // runBn256Pairing implements the Bn256Pairing precompile, referenced by both
 // Byzantium and Istanbul operations.
 func runBn256Pairing(input []byte) ([]byte, error) {
+	// Allow at most 4 inputs
+	if len(input) > 4*192 {
+		return nil, errBadPairingInput
+	}
 	// Handle some corner cases cheaply
 	if len(input)%192 > 0 {
 		return nil, errBadPairingInput
