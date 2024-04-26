@@ -262,6 +262,8 @@ func TestGetChunkRangesCodecv1(t *testing.T) {
 }
 
 func TestValidateBatchCodecv0(t *testing.T) {
+	chainConfig := &params.ChainConfig{}
+
 	block1 := readBlockFromJSON(t, "./testdata/blockTrace_02.json")
 	chunk1 := &encoding.Chunk{Blocks: []*encoding.Block{block1}}
 
@@ -279,7 +281,7 @@ func TestValidateBatchCodecv0(t *testing.T) {
 		WithdrawRoot: chunk3.Blocks[len(chunk3.Blocks)-1].WithdrawRoot,
 	}
 
-	endBlock1, finalizedBatchMeta1, err := validateBatch(event1, parentBatchMeta1, []*encoding.Chunk{chunk1, chunk2, chunk3}, &params.ChainConfig{}, nil)
+	endBlock1, finalizedBatchMeta1, err := validateBatch(event1, parentBatchMeta1, []*encoding.Chunk{chunk1, chunk2, chunk3}, chainConfig, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(13), endBlock1)
 
@@ -289,8 +291,8 @@ func TestValidateBatchCodecv0(t *testing.T) {
 	parentBatchMeta2 := &rawdb.FinalizedBatchMeta{
 		BatchHash:            event1.BatchHash,
 		TotalL1MessagePopped: 11,
-		StateRoot:            chunk3.Blocks[len(chunk3.Blocks)-1].Header.Root,
-		WithdrawRoot:         chunk3.Blocks[len(chunk3.Blocks)-1].WithdrawRoot,
+		StateRoot:            event1.StateRoot,
+		WithdrawRoot:         event1.WithdrawRoot,
 	}
 	assert.Equal(t, parentBatchMeta2, finalizedBatchMeta1)
 	event2 := &L1FinalizeBatchEvent{
@@ -299,20 +301,22 @@ func TestValidateBatchCodecv0(t *testing.T) {
 		StateRoot:    chunk4.Blocks[len(chunk4.Blocks)-1].Header.Root,
 		WithdrawRoot: chunk4.Blocks[len(chunk4.Blocks)-1].WithdrawRoot,
 	}
-	endBlock2, finalizedBatchMeta2, err := validateBatch(event2, parentBatchMeta2, []*encoding.Chunk{chunk4}, &params.ChainConfig{}, nil)
+	endBlock2, finalizedBatchMeta2, err := validateBatch(event2, parentBatchMeta2, []*encoding.Chunk{chunk4}, chainConfig, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(17), endBlock2)
 
 	parentBatchMeta3 := &rawdb.FinalizedBatchMeta{
 		BatchHash:            event2.BatchHash,
 		TotalL1MessagePopped: 42,
-		StateRoot:            chunk4.Blocks[len(chunk4.Blocks)-1].Header.Root,
-		WithdrawRoot:         chunk4.Blocks[len(chunk4.Blocks)-1].WithdrawRoot,
+		StateRoot:            event2.StateRoot,
+		WithdrawRoot:         event2.WithdrawRoot,
 	}
 	assert.Equal(t, parentBatchMeta3, finalizedBatchMeta2)
 }
 
 func TestValidateBatchCodecv1(t *testing.T) {
+	chainConfig := &params.ChainConfig{BernoulliBlock: big.NewInt(0)}
+
 	block1 := readBlockFromJSON(t, "./testdata/blockTrace_02.json")
 	chunk1 := &encoding.Chunk{Blocks: []*encoding.Block{block1}}
 
@@ -330,7 +334,7 @@ func TestValidateBatchCodecv1(t *testing.T) {
 		WithdrawRoot: chunk3.Blocks[len(chunk3.Blocks)-1].WithdrawRoot,
 	}
 
-	endBlock1, finalizedBatchMeta1, err := validateBatch(event1, parentBatchMeta1, []*encoding.Chunk{chunk1, chunk2, chunk3}, &params.ChainConfig{BernoulliBlock: big.NewInt(0)}, nil)
+	endBlock1, finalizedBatchMeta1, err := validateBatch(event1, parentBatchMeta1, []*encoding.Chunk{chunk1, chunk2, chunk3}, chainConfig, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(13), endBlock1)
 
@@ -340,78 +344,97 @@ func TestValidateBatchCodecv1(t *testing.T) {
 	parentBatchMeta2 := &rawdb.FinalizedBatchMeta{
 		BatchHash:            event1.BatchHash,
 		TotalL1MessagePopped: 11,
-		StateRoot:            chunk3.Blocks[len(chunk3.Blocks)-1].Header.Root,
-		WithdrawRoot:         chunk3.Blocks[len(chunk3.Blocks)-1].WithdrawRoot,
+		StateRoot:            event1.StateRoot,
+		WithdrawRoot:         event1.WithdrawRoot,
 	}
 	assert.Equal(t, parentBatchMeta2, finalizedBatchMeta1)
 	event2 := &L1FinalizeBatchEvent{
 		BatchIndex:   big.NewInt(1),
-		BatchHash:    common.HexToHash("0x8eb3f63fbf286bb51a49879bfc653c53c890621542c640e5b6163cffb5a47aa6"),
+		BatchHash:    common.HexToHash("0x7f230ce84b4bf86f8ee22ffb5c145e3ef3ddf2a76da4936a33f33cebdb63a48a"),
 		StateRoot:    chunk4.Blocks[len(chunk4.Blocks)-1].Header.Root,
 		WithdrawRoot: chunk4.Blocks[len(chunk4.Blocks)-1].WithdrawRoot,
 	}
-	endBlock2, finalizedBatchMeta2, err := validateBatch(event2, parentBatchMeta2, []*encoding.Chunk{chunk4}, &params.ChainConfig{BernoulliBlock: big.NewInt(0)}, nil)
+	endBlock2, finalizedBatchMeta2, err := validateBatch(event2, parentBatchMeta2, []*encoding.Chunk{chunk4}, chainConfig, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(17), endBlock2)
 
 	parentBatchMeta3 := &rawdb.FinalizedBatchMeta{
 		BatchHash:            event2.BatchHash,
 		TotalL1MessagePopped: 42,
-		StateRoot:            chunk4.Blocks[len(chunk4.Blocks)-1].Header.Root,
-		WithdrawRoot:         chunk4.Blocks[len(chunk4.Blocks)-1].WithdrawRoot,
+		StateRoot:            event2.StateRoot,
+		WithdrawRoot:         event2.WithdrawRoot,
 	}
 	assert.Equal(t, parentBatchMeta3, finalizedBatchMeta2)
 }
 
-func TestValidateBatchFromCodecv0ToCodecv1(t *testing.T) {
+func TestValidateBatchUpgrades(t *testing.T) {
+	chainConfig := &params.ChainConfig{BernoulliBlock: big.NewInt(14), CurieBlock: big.NewInt(16)}
+
 	block1 := readBlockFromJSON(t, "./testdata/blockTrace_02.json")
 	chunk1 := &encoding.Chunk{Blocks: []*encoding.Block{block1}}
 
 	block2 := readBlockFromJSON(t, "./testdata/blockTrace_03.json")
 	chunk2 := &encoding.Chunk{Blocks: []*encoding.Block{block2}}
 
-	block3 := readBlockFromJSON(t, "./testdata/blockTrace_04.json")
-	chunk3 := &encoding.Chunk{Blocks: []*encoding.Block{block3}}
-
 	parentBatchMeta1 := &rawdb.FinalizedBatchMeta{}
 	event1 := &L1FinalizeBatchEvent{
 		BatchIndex:   big.NewInt(0),
-		BatchHash:    common.HexToHash("0xfd3ecf106ce993adc6db68e42ce701bfe638434395abdeeb871f7bd395ae2368"),
-		StateRoot:    chunk3.Blocks[len(chunk3.Blocks)-1].Header.Root,
-		WithdrawRoot: chunk3.Blocks[len(chunk3.Blocks)-1].WithdrawRoot,
+		BatchHash:    common.HexToHash("0xb501030a30bf3936aaf7d50ae175035ecfa04c8ce0031de3936300cf2718c427"),
+		StateRoot:    chunk2.Blocks[len(chunk2.Blocks)-1].Header.Root,
+		WithdrawRoot: chunk2.Blocks[len(chunk2.Blocks)-1].WithdrawRoot,
 	}
 
-	endBlock1, finalizedBatchMeta1, err := validateBatch(event1, parentBatchMeta1, []*encoding.Chunk{chunk1, chunk2, chunk3}, &params.ChainConfig{BernoulliBlock: big.NewInt(16)}, nil)
+	endBlock1, finalizedBatchMeta1, err := validateBatch(event1, parentBatchMeta1, []*encoding.Chunk{chunk1, chunk2}, chainConfig, nil)
 	assert.NoError(t, err)
-	assert.Equal(t, uint64(13), endBlock1)
+	assert.Equal(t, uint64(3), endBlock1)
 
-	block4 := readBlockFromJSON(t, "./testdata/blockTrace_05.json")
-	chunk4 := &encoding.Chunk{Blocks: []*encoding.Block{block4}}
+	block3 := readBlockFromJSON(t, "./testdata/blockTrace_04.json")
+	chunk3 := &encoding.Chunk{Blocks: []*encoding.Block{block3}}
 
 	parentBatchMeta2 := &rawdb.FinalizedBatchMeta{
 		BatchHash:            event1.BatchHash,
-		TotalL1MessagePopped: 11,
-		StateRoot:            chunk3.Blocks[len(chunk3.Blocks)-1].Header.Root,
-		WithdrawRoot:         chunk3.Blocks[len(chunk3.Blocks)-1].WithdrawRoot,
+		TotalL1MessagePopped: 0,
+		StateRoot:            event1.StateRoot,
+		WithdrawRoot:         event1.WithdrawRoot,
 	}
 	assert.Equal(t, parentBatchMeta2, finalizedBatchMeta1)
 	event2 := &L1FinalizeBatchEvent{
 		BatchIndex:   big.NewInt(1),
-		BatchHash:    common.HexToHash("0x425ab2830087e2642f0407550d65f108ee93533063ef0bfab1263b0b3c8a4c9e"),
-		StateRoot:    chunk4.Blocks[len(chunk4.Blocks)-1].Header.Root,
-		WithdrawRoot: chunk4.Blocks[len(chunk4.Blocks)-1].WithdrawRoot,
+		BatchHash:    common.HexToHash("0x1879659b3cdc1039a9db62f4ac5a6d0d8f2aaa13ff484917d603fe04eaf2d7c1"),
+		StateRoot:    chunk3.Blocks[len(chunk3.Blocks)-1].Header.Root,
+		WithdrawRoot: chunk3.Blocks[len(chunk3.Blocks)-1].WithdrawRoot,
 	}
-	endBlock2, finalizedBatchMeta2, err := validateBatch(event2, parentBatchMeta2, []*encoding.Chunk{chunk4}, &params.ChainConfig{BernoulliBlock: big.NewInt(16)}, nil)
+	endBlock2, finalizedBatchMeta2, err := validateBatch(event2, parentBatchMeta2, []*encoding.Chunk{chunk3}, chainConfig, nil)
 	assert.NoError(t, err)
-	assert.Equal(t, uint64(17), endBlock2)
+	assert.Equal(t, uint64(13), endBlock2)
+
+	block4 := readBlockFromJSON(t, "./testdata/blockTrace_05.json")
+	chunk4 := &encoding.Chunk{Blocks: []*encoding.Block{block4}}
 
 	parentBatchMeta3 := &rawdb.FinalizedBatchMeta{
 		BatchHash:            event2.BatchHash,
-		TotalL1MessagePopped: 42,
-		StateRoot:            chunk4.Blocks[len(chunk4.Blocks)-1].Header.Root,
-		WithdrawRoot:         chunk4.Blocks[len(chunk4.Blocks)-1].WithdrawRoot,
+		TotalL1MessagePopped: 11,
+		StateRoot:            event2.StateRoot,
+		WithdrawRoot:         event2.WithdrawRoot,
 	}
 	assert.Equal(t, parentBatchMeta3, finalizedBatchMeta2)
+	event3 := &L1FinalizeBatchEvent{
+		BatchIndex:   big.NewInt(2),
+		BatchHash:    common.HexToHash("0xcea1d91e1a5d2ae020b9aad9065614a6f86e72e0f0b5c9f9c173559523b13cce"),
+		StateRoot:    chunk4.Blocks[len(chunk4.Blocks)-1].Header.Root,
+		WithdrawRoot: chunk4.Blocks[len(chunk4.Blocks)-1].WithdrawRoot,
+	}
+	endBlock3, finalizedBatchMeta3, err := validateBatch(event3, parentBatchMeta3, []*encoding.Chunk{chunk4}, chainConfig, nil)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(17), endBlock3)
+
+	parentBatchMeta4 := &rawdb.FinalizedBatchMeta{
+		BatchHash:            event3.BatchHash,
+		TotalL1MessagePopped: 42,
+		StateRoot:            event3.StateRoot,
+		WithdrawRoot:         event3.WithdrawRoot,
+	}
+	assert.Equal(t, parentBatchMeta4, finalizedBatchMeta3)
 }
 
 func readBlockFromJSON(t *testing.T, filename string) *encoding.Block {

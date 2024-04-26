@@ -422,7 +422,13 @@ func validateBatch(event *L1FinalizeBatchEvent, parentBatchMeta *rawdb.Finalized
 		}
 		localBatchHash = daBatch.Hash()
 	} else {
-		daBatch, err := codecv1.NewDABatch(batch)
+		var useCompression bool
+		if chainCfg.IsCurie(startBlock.Header.Number) {
+			useCompression = true
+		} else {
+			useCompression = false
+		}
+		daBatch, err := codecv1.NewDABatch(batch, useCompression)
 		if err != nil {
 			return 0, nil, fmt.Errorf("failed to create codecv1 DA batch, batch index: %v, err: %w", event.BatchIndex.Uint64(), err)
 		}
