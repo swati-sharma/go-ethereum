@@ -142,7 +142,7 @@ func (api *consensusAPI) AssembleBlock(params assembleBlockParams) (*executableD
 		Extra:      []byte{},
 		Time:       params.Timestamp,
 	}
-	if config := api.eth.BlockChain().Config(); config.IsBanach(header.Number) {
+	if config := api.eth.BlockChain().Config(); config.IsCurie(header.Number) {
 		stateDb, err := api.eth.BlockChain().StateAt(parent.Root())
 		if err != nil {
 			return nil, err
@@ -179,7 +179,7 @@ func (api *consensusAPI) AssembleBlock(params assembleBlockParams) (*executableD
 		from, _ := types.Sender(signer, tx)
 
 		// Execute the transaction
-		env.state.Prepare(tx.Hash(), env.tcount)
+		env.state.SetTxContext(tx.Hash(), env.tcount)
 		err = env.commitTransaction(tx, coinbase)
 		switch err {
 		case core.ErrGasLimitReached:
@@ -273,7 +273,7 @@ func insertBlockParamsToBlock(config *chainParams.ChainConfig, parent *types.Hea
 		GasUsed:     params.GasUsed,
 		Time:        params.Timestamp,
 	}
-	if config.IsBanach(number) {
+	if config.IsCurie(number) {
 		header.BaseFee = misc.CalcBaseFee(config, parent, parentL1BaseFee)
 	}
 	block := types.NewBlockWithHeader(header).WithBody(txs, nil /* uncles */)
