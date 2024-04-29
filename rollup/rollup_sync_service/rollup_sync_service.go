@@ -8,6 +8,10 @@ import (
 	"reflect"
 	"time"
 
+	"github.com/scroll-tech/da-codec/encoding"
+	"github.com/scroll-tech/da-codec/encoding/codecv0"
+	"github.com/scroll-tech/da-codec/encoding/codecv1"
+
 	"github.com/scroll-tech/go-ethereum/accounts/abi"
 	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/core"
@@ -20,9 +24,6 @@ import (
 
 	"github.com/scroll-tech/go-ethereum/rollup/rcfg"
 	"github.com/scroll-tech/go-ethereum/rollup/sync_service"
-	"github.com/scroll-tech/go-ethereum/rollup/types/encoding"
-	"github.com/scroll-tech/go-ethereum/rollup/types/encoding/codecv0"
-	"github.com/scroll-tech/go-ethereum/rollup/types/encoding/codecv1"
 	"github.com/scroll-tech/go-ethereum/rollup/withdrawtrie"
 )
 

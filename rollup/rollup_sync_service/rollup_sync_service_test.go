@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/scroll-tech/da-codec/encoding"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -19,8 +20,6 @@ import (
 	"github.com/scroll-tech/go-ethereum/ethdb/memorydb"
 	"github.com/scroll-tech/go-ethereum/node"
 	"github.com/scroll-tech/go-ethereum/params"
-
-	"github.com/scroll-tech/go-ethereum/rollup/types/encoding"
 )
 
 func TestRollupSyncServiceStartAndStop(t *testing.T) {
