@@ -4,6 +4,8 @@ import (
 	"encoding/binary"
 	"errors"
 	"math/big"
+
+	"github.com/scroll-tech/go-ethereum/common"
 )
 
 // BlockContext represents the essential data of a block in the ScrollChain.
@@ -24,7 +26,9 @@ func decodeBlockContext(encodedBlockContext []byte) (*BlockContext, error) {
 		return nil, errors.New("block encoding is not 60 bytes long")
 	}
 	baseFee := big.NewInt(0).SetBytes(encodedBlockContext[16:48])
-
+	if baseFee.Cmp(common.Big0) == 0 {
+		baseFee = nil
+	}
 	return &BlockContext{
 		BlockNumber:     binary.BigEndian.Uint64(encodedBlockContext[0:8]),
 		Timestamp:       binary.BigEndian.Uint64(encodedBlockContext[8:16]),

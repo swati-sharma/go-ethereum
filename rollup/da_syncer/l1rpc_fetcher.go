@@ -76,6 +76,10 @@ func newL1RpcDaFetcher(ctx context.Context, genesisConfig *params.ChainConfig, l
 	return &daFetcher, nil
 }
 
+func (f *L1RPCFetcher) SetLatestProcessedBlock(to uint64) {
+	f.latestProcessedBlock = to
+}
+
 // Fetch DA fetches all da events and converts it to DA format in some fetchBlockRange
 func (f *L1RPCFetcher) FetchDA() (DA, uint64, error) {
 	latestConfirmed, err := f.client.getLatestFinalizedBlockNumber(f.ctx)
@@ -91,25 +95,18 @@ func (f *L1RPCFetcher) FetchDA() (DA, uint64, error) {
 	if to > latestConfirmed {
 		to = latestConfirmed
 	}
-	log.Info("L1RpcFetcher fetching...", "from", from, "to", to, "latest processed block", f.latestProcessedBlock, "latest confirmed", latestConfirmed)
 
 	logs, err := f.client.fetchRollupEventsInRange(f.ctx, from, to)
-	for id, ll := range logs {
-		log.Info("log number", "id", id, "block number", ll.BlockNumber, "txhash", ll.TxHash)
-	}
 	if err != nil {
 		log.Error("failed to fetch rollup events in range", "from block", from, "to block", to, "err", err)
 		return nil, 0, err
 	}
-	log.Info("L1RPCFetcher fetched logs", "log size", len(logs))
 	da, err := f.processLogsToDA(logs)
 	if err != nil {
 		log.Error("failed to process rollup events in range", "from block", from, "to block", to, "err", err)
 		return nil, 0, err
 	}
-	log.Info("L1Rpcfetcher processed logs to da", "da len", len(da))
-	f.latestProcessedBlock = to
-	// rawdb.WriteDASyncedL1BlockNumber(f.db, to)
+	log.Trace("L1Rpcfetcher fetched and processed logs to da", "from", from, "to", to, "da len", len(da))
 	return da, to, nil
 }
 

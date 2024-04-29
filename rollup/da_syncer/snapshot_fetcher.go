@@ -14,3 +14,7 @@ func newSnapshotFetcher(fetchBlockRange uint64) (DaFetcher, error) {
 func (f *SnapshotFetcher) FetchDA() (DA, uint64, error) {
 	return nil, 0, nil
 }
+
+func (f *SnapshotFetcher) SetLatestProcessedBlock(to uint64) {
+	return
+}

@@ -20,7 +20,7 @@ const (
 	DefaultFetchBlockRange = uint64(100)
 
 	// DefaultPollInterval is the frequency at which we query for new L1 messages.
-	DefaultPollInterval = time.Second * 60
+	DefaultPollInterval = time.Second * 10
 
 	// LogProgressInterval is the frequency at which we log progress.
 	LogProgressInterval = time.Second * 10
@@ -97,7 +97,7 @@ func (s *SyncService) Start() {
 	latestConfirmed, err := s.client.getLatestConfirmedBlockNumber(s.ctx)
 	if err == nil && latestConfirmed > s.latestProcessedBlock+1000 {
 		log.Warn("Running initial sync of L1 messages before starting l2geth, this might take a while...")
-		// s.fetchMessages()
+		s.fetchMessages()
 		log.Info("L1 message initial sync completed", "latestProcessedBlock", s.latestProcessedBlock)
 	}
 
@@ -107,7 +107,7 @@ func (s *SyncService) Start() {
 
 		for {
 			// don't wait for ticker during startup
-			// s.fetchMessages()
+			s.fetchMessages()
 
 			select {
 			case <-s.ctx.Done():

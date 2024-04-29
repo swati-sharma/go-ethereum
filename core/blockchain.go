@@ -1799,6 +1799,27 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 	return it.index, err
 }
 
+// PreprocessBlock processes block on top of the chain to calculate receipts, bloom and state root
+func (bc *BlockChain) PreprocessBlock(block *types.Block) (common.Hash, types.Bloom, common.Hash, uint64, error) {
+	// Retrieve the parent block and it's state to execute on top
+	parent := bc.CurrentBlock().Header()
+	if parent == nil {
+		parent = bc.GetHeader(block.ParentHash(), block.NumberU64()-1)
+	}
+	statedb, err := state.New(parent.Root, bc.stateCache, bc.snaps)
+	if err != nil {
+		return common.Hash{}, types.Bloom{}, common.Hash{}, 0, err
+	}
+	receipts, _, usedGas, err := bc.processor.Process(block, statedb, bc.vmConfig)
+	if err != nil {
+		return common.Hash{}, types.Bloom{}, common.Hash{}, 0, err
+	}
+	receiptSha := types.DeriveSha(receipts, trie.NewStackTrie(nil))
+	bloom := types.CreateBloom(receipts)
+	stateRoot := statedb.GetRootHash()
+	return receiptSha, bloom, stateRoot, usedGas, nil
+}
+
 // insertSideChain is called when an import batch hits upon a pruned ancestor
 // error, which happens when a sidechain with a sufficiently old fork-block is
 // found.

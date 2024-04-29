@@ -7,6 +7,7 @@ import (
 	"math/big"
 	"time"
 
+	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/core"
 	"github.com/scroll-tech/go-ethereum/core/rawdb"
 	"github.com/scroll-tech/go-ethereum/core/types"
@@ -14,6 +15,7 @@ import (
 	"github.com/scroll-tech/go-ethereum/log"
 	"github.com/scroll-tech/go-ethereum/params"
 	"github.com/scroll-tech/go-ethereum/rollup/sync_service"
+	"github.com/scroll-tech/go-ethereum/trie"
 )
 
 // Config is the configuration parameters of da syncer.
@@ -120,39 +122,37 @@ func (s *DaSyncer) syncWithDa() {
 				log.Warn("failed to process DA to blocks", "err", err)
 				return
 			}
-			log.Info("commit batch", "batchindex", daEntry.BatchIndex)
+			log.Debug("commit batch", "batchindex", daEntry.BatchIndex)
 			s.batches[daEntry.BatchIndex] = blocks
 		case RevertBatch:
-			log.Info("revert batch", "batchindex", daEntry.BatchIndex)
+			log.Debug("revert batch", "batchindex", daEntry.BatchIndex)
 			delete(s.batches, daEntry.BatchIndex)
 		case FinalizeBatch:
-			log.Info("finalize batch", "batchindex", daEntry.BatchIndex)
+			log.Debug("finalize batch", "batchindex", daEntry.BatchIndex)
 			blocks, ok := s.batches[daEntry.BatchIndex]
 			if !ok {
-				log.Info("cannot find blocks for batch", "batch index", daEntry.BatchIndex, "err", err)
+				log.Warn("cannot find blocks for batch", "batch index", daEntry.BatchIndex, "err", err)
 				return
 			}
 			s.insertBlocks(blocks)
 		}
 	}
 	rawdb.WriteDASyncedL1BlockNumber(s.db, to)
+	s.DaFetcher.SetLatestProcessedBlock(to)
 }
 
 func (s *DaSyncer) processDaToBlocks(daEntry *DAEntry) ([]*types.Block, error) {
 	var blocks []*types.Block
 	l1TxIndex := 0
-	prevHash := s.blockchain.CurrentBlock().Hash()
 	for _, chunk := range daEntry.Chunks {
 		l2TxIndex := 0
 		for _, blockContext := range chunk.BlockContexts {
 			// create header
 			header := types.Header{
-				// todo: maybe need to get ParentHash here too
-				ParentHash: prevHash,
-				Number:     big.NewInt(0).SetUint64(blockContext.BlockNumber),
-				Time:       blockContext.Timestamp,
-				BaseFee:    blockContext.BaseFee,
-				GasLimit:   blockContext.GasLimit,
+				Number:   big.NewInt(0).SetUint64(blockContext.BlockNumber),
+				Time:     blockContext.Timestamp,
+				BaseFee:  blockContext.BaseFee,
+				GasLimit: blockContext.GasLimit,
 			}
 			// create txs
 			// var txs types.Transactions
@@ -163,17 +163,14 @@ func (s *DaSyncer) processDaToBlocks(daEntry *DAEntry) ([]*types.Block, error) {
 				txs = append(txs, l1Tx)
 				l1TxIndex++
 			}
-			// log.Info("processing block", "block hash", blockContext.BlockNumber, "numl1messages", blockContext.NumL1Messages, "numtxs", blockContext.NumTransactions)
 			// insert l2 txs
 			for id := int(blockContext.NumL1Messages); id < int(blockContext.NumTransactions); id++ {
 				l2Tx := &types.Transaction{}
-				// log.Info("processing l2 tx", "num", id, "l2tx", l2Tx)
 				l2Tx.UnmarshalBinary(chunk.L2Txs[l2TxIndex])
 				txs = append(txs, l2Tx)
 				l2TxIndex++
 			}
 			block := types.NewBlockWithHeader(&header).WithBody(txs, make([]*types.Header, 0))
-			prevHash = block.Hash()
 			blocks = append(blocks, block)
 		}
 	}
@@ -181,23 +178,35 @@ func (s *DaSyncer) processDaToBlocks(daEntry *DAEntry) ([]*types.Block, error) {
 }
 
 func (s *DaSyncer) insertBlocks(blocks []*types.Block) error {
+	prevHash := s.blockchain.CurrentBlock().Hash()
 	for _, block := range blocks {
-		log.Info("block info", "number", block.Number(), "hash", block.Hash(), "parentHash", block.ParentHash())
-		log.Info("block header", "block header", block.Header())
-	}
-	if index, err := s.blockchain.InsertChain(blocks); err != nil {
-		log.Info("err != nil")
-		if index < len(blocks) {
-			log.Debug("Downloaded item processing failed", "number", blocks[index].Header().Number, "hash", blocks[index].Header().Hash(), "err", err)
-		} else {
-			// The InsertChain method in blockchain.go will sometimes return an out-of-bounds index,
-			// when it needs to preprocess blocks to import a sidechain.
-			// The importer will put together a new list of blocks to import, which is a superset
-			// of the blocks delivered from the downloader, and the indexing will be off.
-			log.Debug("Downloaded item processing failed on sidechain import", "index", index, "err", err)
+		header := block.Header()
+		txs := block.Transactions()
+
+		// fill header with all necessary fields
+		var err error
+		header.ReceiptHash, header.Bloom, header.Root, header.GasUsed, err = s.blockchain.PreprocessBlock(block)
+		if err != nil {
+			return fmt.Errorf("block preprocessing failed, block number: %d, error: %v", block.Number(), err)
 		}
-		return fmt.Errorf("%w: %v", errInvalidChain, err)
+		header.UncleHash = common.HexToHash("0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347")
+		header.Difficulty = common.Big1
+		header.BaseFee = nil
+		header.TxHash = types.DeriveSha(txs, trie.NewStackTrie(nil))
+		header.ParentHash = prevHash
+
+		fullBlock := types.NewBlockWithHeader(header).WithBody(txs, make([]*types.Header, 0))
+
+		if index, err := s.blockchain.InsertChainWithoutSealVerification(fullBlock); err != nil {
+			if index < len(blocks) {
+				log.Debug("Block insert failed", "number", blocks[index].Header().Number, "hash", blocks[index].Header().Hash(), "err", err)
+			}
+			return fmt.Errorf("cannot insert block, number: %d, error: %v", block.Number(), err)
+		}
+		prevHash = fullBlock.Hash()
+		log.Info("inserted block", "blockhain height", s.blockchain.CurrentBlock().Header().Number, "block hash", s.blockchain.CurrentBlock().Header().Hash())
 	}
+
 	log.Info("insertblocks completed", "blockchain height", s.blockchain.CurrentBlock().Header().Number, "block hash", s.blockchain.CurrentBlock().Header().Hash())
 	return nil
 }
