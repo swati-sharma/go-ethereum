@@ -7,7 +7,7 @@ on:
 
 jobs:
   build-and-push:
-    runs-on: ubuntu-latest
+    runs-on: jenkins
     steps:
     - name: Checkout code
       uses: actions/checkout@v2
