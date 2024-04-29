@@ -173,8 +173,8 @@ type intervalAdjust struct {
 // prioritizedTransaction represents a single transaction that
 // should be processed as the first transaction in the next block.
 type prioritizedTransaction struct {
-	blockNumber uint64
-	tx          *types.Transaction
+	overflowBlockNumber uint64
+	tx                  *types.Transaction
 }
 
 // worker is the main object which takes care of submitting new work to consensus engine
@@ -1180,10 +1180,10 @@ loop:
 				// Prioritize transaction for the next block.
 				// If there are no new L1 messages, this transaction will be the 1st transaction in the next block,
 				// at which point we can definitively decide if we should skip it or not.
-				log.Debug("Prioritizing transaction for next block", "blockNumber", w.current.header.Number.Uint64()+1, "tx", tx.Hash().String())
+				log.Debug("Prioritizing transaction for the following blocks", "tx", tx.Hash().String(), "skipped in block", w.current.header.Number.Uint64())
 				w.prioritizedTx = &prioritizedTransaction{
-					blockNumber: w.current.header.Number.Uint64() + 1,
-					tx:          tx,
+					overflowBlockNumber: w.current.header.Number.Uint64(),
+					tx:                  tx,
 				}
 				atomic.AddInt32(&w.newTxs, int32(1))
 
@@ -1483,11 +1483,9 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 	l2CommitNewWorkCommitL1MsgTimer.UpdateSince(commitL1MsgStart)
 
 	prioritizedTxStart := time.Now()
-	if w.prioritizedTx != nil && w.current.header.Number.Uint64() > w.prioritizedTx.blockNumber {
-		w.prioritizedTx = nil
-	}
-	if !circuitCapacityReached && w.prioritizedTx != nil && w.current.header.Number.Uint64() == w.prioritizedTx.blockNumber {
+	if !circuitCapacityReached && w.prioritizedTx != nil && w.current.header.Number.Uint64() > w.prioritizedTx.overflowBlockNumber {
 		tx := w.prioritizedTx.tx
+		w.prioritizedTx = nil                         // reset prioritizedTx
 		from, _ := types.Sender(w.current.signer, tx) // error already checked before
 		txList := map[common.Address]types.Transactions{from: []*types.Transaction{tx}}
 		txs := types.NewTransactionsByPriceAndNonce(w.current.signer, txList, header.BaseFee)
