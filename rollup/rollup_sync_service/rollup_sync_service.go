@@ -11,6 +11,7 @@ import (
 	"github.com/scroll-tech/da-codec/encoding"
 	"github.com/scroll-tech/da-codec/encoding/codecv0"
 	"github.com/scroll-tech/da-codec/encoding/codecv1"
+	"github.com/scroll-tech/da-codec/encoding/codecv2"
 
 	"github.com/scroll-tech/go-ethereum/accounts/abi"
 	"github.com/scroll-tech/go-ethereum/common"
@@ -422,14 +423,14 @@ func validateBatch(event *L1FinalizeBatchEvent, parentBatchMeta *rawdb.Finalized
 			return 0, nil, fmt.Errorf("failed to create codecv0 DA batch, batch index: %v, err: %w", event.BatchIndex.Uint64(), err)
 		}
 		localBatchHash = daBatch.Hash()
-	} else {
-		var useCompression bool
-		if chainCfg.IsCurie(startBlock.Header.Number) {
-			useCompression = true
-		} else {
-			useCompression = false
+	} else if !chainCfg.IsCurie(startBlock.Header.Number) { // codecv1: batches after Bernoulli and before Curie
+		daBatch, err := codecv1.NewDABatch(batch)
+		if err != nil {
+			return 0, nil, fmt.Errorf("failed to create codecv1 DA batch, batch index: %v, err: %w", event.BatchIndex.Uint64(), err)
 		}
-		daBatch, err := codecv1.NewDABatch(batch, useCompression)
+		localBatchHash = daBatch.Hash()
+	} else { // codecv2: batches after Curie
+		daBatch, err := codecv2.NewDABatch(batch)
 		if err != nil {
 			return 0, nil, fmt.Errorf("failed to create codecv1 DA batch, batch index: %v, err: %w", event.BatchIndex.Uint64(), err)
 		}
