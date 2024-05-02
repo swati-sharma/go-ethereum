@@ -531,6 +531,17 @@ type ScrollConfig struct {
 
 	// L1 config
 	L1Config *L1Config `json:"l1Config,omitempty"`
+
+	// System contract config
+	SystemTx *SystemTxConfig `json:"systemTxConfig,omitempty"`
+}
+
+type SystemTxConfig struct {
+	Enabled bool `json:"enabled"`
+
+	// TODO maybe move these in state (system contract)
+	Senders   []common.Address `json:"senders"`
+	Contracts []common.Address `json:"contracts"`
 }
 
 // L1Config contains the l1 parameters needed to sync l1 contract events (e.g., l1 messages, commit/revert/finalize batches) in the sequencer
@@ -560,6 +571,10 @@ func (s ScrollConfig) ZktrieEnabled() bool {
 
 func (s ScrollConfig) ShouldIncludeL1Messages() bool {
 	return s.L1Config != nil && s.L1Config.NumL1MessagesPerBlock > 0
+}
+
+func (s ScrollConfig) SystemTxEnabled() bool {
+	return s.SystemTx != nil && s.SystemTx.Enabled
 }
 
 func (s ScrollConfig) String() string {
