@@ -419,7 +419,7 @@ func TestValidateBatchUpgrades(t *testing.T) {
 	assert.Equal(t, parentBatchMeta3, finalizedBatchMeta2)
 	event3 := &L1FinalizeBatchEvent{
 		BatchIndex:   big.NewInt(2),
-		BatchHash:    common.HexToHash("0xcea1d91e1a5d2ae020b9aad9065614a6f86e72e0f0b5c9f9c173559523b13cce"),
+		BatchHash:    common.HexToHash("0x798bb57873f80688144c930e7475b000da565edb33e4436eefd744961a4fa300"),
 		StateRoot:    chunk4.Blocks[len(chunk4.Blocks)-1].Header.Root,
 		WithdrawRoot: chunk4.Blocks[len(chunk4.Blocks)-1].WithdrawRoot,
 	}
