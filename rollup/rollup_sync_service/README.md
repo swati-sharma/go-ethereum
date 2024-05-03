@@ -10,7 +10,7 @@ Follow these steps to build the `.so` file, in ./rollup/rollup_sync_service:
     docker run -it --rm -v "$(PWD):/workspace" -w /workspace my-dev-container
     ```
 
-2. Change directory to rs:
+2. Change directory:
     ```
     cd libzstd
     ```
