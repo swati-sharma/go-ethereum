@@ -2291,3 +2291,8 @@ func (bc *BlockChain) InsertHeaderChain(chain []*types.Header, checkFreq int) (i
 func (bc *BlockChain) Database() ethdb.Database {
 	return bc.db
 }
+
+func (bc *BlockChain) WithStateProcessor(processor Processor) *BlockChain {
+	bc.processor = processor
+	return bc
+}

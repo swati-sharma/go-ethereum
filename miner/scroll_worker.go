@@ -630,7 +630,7 @@ func (w *worker) collectPendingL1Messages(startIndex uint64) []types.L1MessageTx
 
 // startNewPipeline generates several new sealing tasks based on the parent block.
 func (w *worker) startNewPipeline(timestamp int64) {
-
+	return
 	if w.currentPipeline != nil {
 		w.currentPipeline.Kill()
 		w.currentPipeline = nil

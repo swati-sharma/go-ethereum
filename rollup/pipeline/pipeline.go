@@ -34,12 +34,12 @@ var (
 	ErrApplyStageDone           = errors.New("apply stage is done")
 	ErrUnexpectedL1MessageIndex = errors.New("unexpected L1 message index")
 
-	lifetimeTimer   = metrics.NewRegisteredTimer("pipeline/lifetime", nil)
-	applyTimer      = metrics.NewRegisteredTimer("pipeline/apply", nil)
-	applyIdleTimer  = metrics.NewRegisteredTimer("pipeline/apply_idle", nil)
-	applyStallTimer = metrics.NewRegisteredTimer("pipeline/apply_stall", nil)
-	cccTimer        = metrics.NewRegisteredTimer("pipeline/ccc", nil)
-	cccIdleTimer    = metrics.NewRegisteredTimer("pipeline/ccc_idle", nil)
+	LifetimeTimer   = metrics.NewRegisteredTimer("pipeline/lifetime", nil)
+	ApplyTimer      = metrics.NewRegisteredTimer("pipeline/apply", nil)
+	ApplyIdleTimer  = metrics.NewRegisteredTimer("pipeline/apply_idle", nil)
+	ApplyStallTimer = metrics.NewRegisteredTimer("pipeline/apply_stall", nil)
+	CccTimer        = metrics.NewRegisteredTimer("pipeline/ccc", nil)
+	CccIdleTimer    = metrics.NewRegisteredTimer("pipeline/ccc_idle", nil)
 )
 
 type Pipeline struct {
@@ -67,6 +67,13 @@ type Pipeline struct {
 
 	// Test hooks
 	beforeTxHook func() // Method to call before processing a transaction.
+
+	LifetimeTimer   time.Duration
+	ApplyTimer      time.Duration
+	ApplyIdleTimer  time.Duration
+	ApplyStallTimer time.Duration
+	CccTimer        time.Duration
+	CccIdleTimer    time.Duration
 }
 
 func NewPipeline(
@@ -194,7 +201,7 @@ func (p *Pipeline) traceAndApplyStage(txsIn <-chan *types.Transaction) (chan err
 
 		var tx *types.Transaction
 		for {
-			applyIdleTimer.Time(func() {
+			ApplyIdleTimer.Time(func() {
 				tx = <-txsIn
 			})
 			if tx == nil {
@@ -267,7 +274,8 @@ func (p *Pipeline) traceAndApplyStage(txsIn <-chan *types.Transaction) (chan err
 					// next stage terminated and caller terminated us as well
 					return
 				}
-				applyStallTimer.UpdateSince(stallStart)
+				ApplyStallTimer.UpdateSince(stallStart)
+				p.ApplyStallTimer += time.Since(stallStart)
 			}
 			if err != nil && trace != nil {
 				err = &ErrorWithTrace{
@@ -275,7 +283,8 @@ func (p *Pipeline) traceAndApplyStage(txsIn <-chan *types.Transaction) (chan err
 					err:   err,
 				}
 			}
-			applyTimer.UpdateSince(applyStart)
+			ApplyTimer.UpdateSince(applyStart)
+			p.ApplyTimer += time.Since(applyStart)
 			resCh <- err
 		}
 	}()
@@ -301,13 +310,14 @@ func (p *Pipeline) cccStage(increments <-chan *PendingBlockIncrement, deadline t
 	go func() {
 		defer func() {
 			close(resultCh)
-			lifetimeTimer.UpdateSince(p.start)
+			LifetimeTimer.UpdateSince(p.start)
 		}()
 		for {
 			idleStart := time.Now()
 			select {
 			case <-time.After(time.Until(deadline)):
-				cccIdleTimer.UpdateSince(idleStart)
+				CccIdleTimer.UpdateSince(idleStart)
+				p.CccIdleTimer += time.Since(idleStart)
 				if lastIncrement != nil {
 					resultCh <- &Result{
 						Rows:       lastAccRows,
@@ -318,7 +328,8 @@ func (p *Pipeline) cccStage(increments <-chan *PendingBlockIncrement, deadline t
 				deadlineReached = true
 				deadline = time.Now().Add(time.Hour)
 			case increment := <-increments:
-				cccIdleTimer.UpdateSince(idleStart)
+				CccIdleTimer.UpdateSince(idleStart)
+				p.CccIdleTimer += time.Since(idleStart)
 				cccStart := time.Now()
 				var accRows *types.RowConsumption
 				var err error
@@ -326,7 +337,8 @@ func (p *Pipeline) cccStage(increments <-chan *PendingBlockIncrement, deadline t
 					if increment.LastTrace != nil {
 						accRows, err = p.ccc.ApplyTransaction(increment.LastTrace)
 						lastTxn := increment.Txs[increment.Txs.Len()-1]
-						cccTimer.UpdateSince(cccStart)
+						CccTimer.UpdateSince(cccStart)
+						p.CccTimer += time.Since(cccStart)
 						if err != nil {
 							resultCh <- &Result{
 								OverflowingTx:    lastTxn,
@@ -345,6 +357,7 @@ func (p *Pipeline) cccStage(increments <-chan *PendingBlockIncrement, deadline t
 
 				// immediately close the block if deadline reached or apply staged is done
 				if increment == nil || deadlineReached {
+					p.LifetimeTimer = time.Since(p.start)
 					resultCh <- &Result{
 						Rows:       lastAccRows,
 						FinalBlock: lastIncrement,
