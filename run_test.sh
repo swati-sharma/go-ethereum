@@ -11,6 +11,7 @@ export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib
 echo "LD_LIBRARY_PATH set to: $LD_LIBRARY_PATH"
 
 # Download and install the project dependencies
+env GO111MODULE=on go run build/ci.go install
 go get ./...
 
 # Save the root directory of the project
