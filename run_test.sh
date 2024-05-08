@@ -12,6 +12,9 @@ sudo mv libscroll_zstd.so /usr/local/lib
 # Set the environment variable
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib
 
+# Download and install the project dependencies
+go get ./...
+
 # Run genesis test
 cd $ROOT_DIR/cmd/geth
 go test -test.run TestCustomGenesis
