@@ -16,6 +16,7 @@
 
 package miner
 
+/*
 import (
 	"bytes"
 	"errors"
@@ -1636,3 +1637,4 @@ func totalFees(block *types.Block, receipts []*types.Receipt) *big.Float {
 	}
 	return new(big.Float).Quo(new(big.Float).SetInt(feesWei), new(big.Float).SetInt(big.NewInt(params.Ether)))
 }
+*/
