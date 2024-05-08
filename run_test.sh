@@ -8,7 +8,6 @@ sudo mv libscroll_zstd.so /usr/local/lib
 
 # Set the environment variable
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib
-echo "LD_LIBRARY_PATH set to: $LD_LIBRARY_PATH"
 
 # Download and install the project dependencies
 env GO111MODULE=on go run build/ci.go install
