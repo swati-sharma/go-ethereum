@@ -11,16 +11,20 @@ GORUN = env GO111MODULE=on go run
 libzkp:
 	cd $(PWD)/rollup/circuitcapacitychecker/libzkp && make libzkp
 
-nccc_geth: ## geth without circuit capacity checker
+libzstd:
 	@wget https://github.com/scroll-tech/da-codec/releases/download/v0.0.0-rc0-ubuntu20.04/libzktrie.so
 	@sudo mv libzktrie.so /usr/local/lib
 	@wget https://github.com/scroll-tech/da-codec/releases/download/v0.0.0-rc0-ubuntu20.04/libscroll_zstd.so
 	@sudo mv libscroll_zstd.so /usr/local/lib
+
+nccc_geth: ## geth without circuit capacity checker
+	libzstd
 	$(GORUN) build/ci.go install ./cmd/geth
 	@echo "Done building."
 	@echo "Run \"$(GOBIN)/geth\" to launch geth."
 
 geth: libzkp
+	libzstd
 	$(GORUN) build/ci.go install -buildtags circuit_capacity_checker ./cmd/geth
 	@echo "Done building."
 	@echo "Run \"$(GOBIN)/geth\" to launch geth."
