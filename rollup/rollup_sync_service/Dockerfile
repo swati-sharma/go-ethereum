@@ -1,6 +1,5 @@
 FROM ubuntu:20.04
 
-# Install Go
 ARG GO_VERSION=1.21.1
 RUN apt-get update
 RUN apt-get install -y wget
