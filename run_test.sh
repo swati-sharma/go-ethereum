@@ -1,19 +1,20 @@
 #!/bin/bash
 
-# Save the root directory of the project
-ROOT_DIR=$(pwd)
-
 # Download .so files
 wget https://github.com/scroll-tech/da-codec/releases/download/v0.0.0-rc0-ubuntu20.04/libzktrie.so
-sudo mv libzktrie.so /usr/local/lib
+mv libzktrie.so /usr/local/lib
 wget https://github.com/scroll-tech/da-codec/releases/download/v0.0.0-rc0-ubuntu20.04/libscroll_zstd.so
-sudo mv libscroll_zstd.so /usr/local/lib
+mv libscroll_zstd.so /usr/local/lib
 
 # Set the environment variable
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib
+echo "LD_LIBRARY_PATH set to: $LD_LIBRARY_PATH"
 
 # Download and install the project dependencies
 go get ./...
+
+# Save the root directory of the project
+ROOT_DIR=$(pwd)
 
 # Run genesis test
 cd $ROOT_DIR/cmd/geth

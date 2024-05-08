@@ -12,6 +12,14 @@ RUN cd /go-ethereum && env GO111MODULE=on go run build/ci.go install ./cmd/geth
 # Pull Geth into a second stage deploy alpine container
 FROM ubuntu:20.04
 
+RUN apt-get update
+RUN apt-get install -y wget
+RUN apt-get install -y gcc
+RUN wget https://github.com/scroll-tech/da-codec/releases/download/v0.0.0-rc0-ubuntu20.04/libzktrie.so && mv libzktrie.so /usr/local/lib
+RUN wget https://github.com/scroll-tech/da-codec/releases/download/v0.0.0-rc0-ubuntu20.04/libscroll_zstd.so && mv libscroll_zstd.so /usr/local/lib
+ENV LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib
+ENV CGO_ENABLED=1
+
 COPY --from=builder /go-ethereum/build/bin/geth /usr/local/bin/
 
 EXPOSE 8545 8546 30303 30303/udp
