@@ -482,11 +482,10 @@ func decodeBlockRangesFromEncodedChunks(codecVersion encoding.CodecVersion, chun
 			for i := 0; i < numBlocks; i++ {
 				startIdx := 1 + i*60 // add 1 to skip numBlocks byte
 				endIdx := startIdx + 60
-				daBlock, err := codecv0.DecodeDABlock(chunk[startIdx:endIdx])
-				if err != nil {
+				daBlocks[i] = &codecv0.DABlock{}
+				if err := daBlocks[i].Decode(chunk[startIdx:endIdx]); err != nil {
 					return nil, err
 				}
-				daBlocks[i] = daBlock
 			}
 
 			chunkBlockRanges = append(chunkBlockRanges, &rawdb.ChunkBlockRange{
@@ -501,11 +500,10 @@ func decodeBlockRangesFromEncodedChunks(codecVersion encoding.CodecVersion, chun
 			for i := 0; i < numBlocks; i++ {
 				startIdx := 1 + i*60 // add 1 to skip numBlocks byte
 				endIdx := startIdx + 60
-				daBlock, err := codecv1.DecodeDABlock(chunk[startIdx:endIdx])
-				if err != nil {
+				daBlocks[i] = &codecv1.DABlock{}
+				if err := daBlocks[i].Decode(chunk[startIdx:endIdx]); err != nil {
 					return nil, err
 				}
-				daBlocks[i] = daBlock
 			}
 
 			chunkBlockRanges = append(chunkBlockRanges, &rawdb.ChunkBlockRange{

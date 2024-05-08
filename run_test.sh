@@ -3,12 +3,14 @@
 # Save the root directory of the project
 ROOT_DIR=$(pwd)
 
-# Set the environment variable
-export LD_LIBRARY_PATH=$ROOT_DIR/rollup/rollup_sync_service/libzstd:$LD_LIBRARY_PATH
+# Download .so files
+wget https://github.com/scroll-tech/da-codec/releases/download/v0.0.0-rc0-ubuntu20.04/libzktrie.so
+sudo mv libzktrie.so /usr/local/lib
+wget https://github.com/scroll-tech/da-codec/releases/download/v0.0.0-rc0-ubuntu20.04/libscroll_zstd.so
+sudo mv libscroll_zstd.so /usr/local/lib
 
-# Compile libzstd
-cd $ROOT_DIR/rollup/rollup_sync_service/libzstd
-make libzstd
+# Set the environment variable
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib
 
 # Run genesis test
 cd $ROOT_DIR/cmd/geth
