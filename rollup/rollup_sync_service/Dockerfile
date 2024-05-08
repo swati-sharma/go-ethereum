@@ -5,6 +5,7 @@ ARG GO_VERSION=1.21.1
 RUN apt-get update
 RUN apt-get install -y wget
 RUN apt-get install -y gcc
+RUN apt-get install -y make
 RUN rm -rf /usr/local/go
 RUN wget https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz
 RUN tar -C /usr/local -xzf go${GO_VERSION}.linux-amd64.tar.gz
