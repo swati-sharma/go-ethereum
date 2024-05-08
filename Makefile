@@ -18,13 +18,13 @@ libzstd:
 	@sudo mv libscroll_zstd.so /usr/local/lib
 
 nccc_geth: ## geth without circuit capacity checker
-	libzstd
+	$(MAKE) libzstd
 	$(GORUN) build/ci.go install ./cmd/geth
 	@echo "Done building."
 	@echo "Run \"$(GOBIN)/geth\" to launch geth."
 
 geth: libzkp
-	libzstd
+	$(MAKE) libzstd
 	$(GORUN) build/ci.go install -buildtags circuit_capacity_checker ./cmd/geth
 	@echo "Done building."
 	@echo "Run \"$(GOBIN)/geth\" to launch geth."
