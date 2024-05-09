@@ -10,7 +10,7 @@ sudo mv libscroll_zstd.so /usr/local/lib
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib
 
 # Download and install the project dependencies
-env GO111MODULE=on go run build/ci.go install
+go run build/ci.go install
 go get ./...
 
 # Save the root directory of the project
@@ -22,4 +22,4 @@ go test -test.run TestCustomGenesis
 
 # Run module tests
 cd $ROOT_DIR
-env GO111MODULE=on go run build/ci.go test ./consensus ./core ./eth ./miner ./node ./trie ./rollup/rollup_sync_service
+go run build/ci.go test ./consensus ./core ./eth ./miner ./node ./trie ./rollup/rollup_sync_service
