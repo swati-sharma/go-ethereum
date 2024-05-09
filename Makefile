@@ -16,12 +16,12 @@ libzstd:
 	@wget https://github.com/scroll-tech/da-codec/releases/download/v0.0.0-rc0-ubuntu20.04/libscroll_zstd.so
 
 nccc_geth: libzstd ## geth without circuit capacity checker
-	$(GORUN) build/ci.go install ./cmd/geth
+	export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$(pwd) && export CGO_LDFLAGS="-L$(pwd) -lscroll_zstd -lzktrie" && $(GORUN) build/ci.go install ./cmd/geth
 	@echo "Done building."
 	@echo "Run \"$(GOBIN)/geth\" to launch geth."
 
 geth: libzkp libzstd
-	$(GORUN) build/ci.go install -buildtags circuit_capacity_checker ./cmd/geth
+	export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$(pwd) && export CGO_LDFLAGS="-L$(pwd) -lscroll_zstd -lzktrie" && $(GORUN) build/ci.go install -buildtags circuit_capacity_checker ./cmd/geth
 	@echo "Done building."
 	@echo "Run \"$(GOBIN)/geth\" to launch geth."
 
