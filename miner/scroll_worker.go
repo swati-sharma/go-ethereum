@@ -75,17 +75,14 @@ var (
 	l2TxCccUnknownErrCounter          = metrics.NewRegisteredCounter("miner/skipped_txs/l2/ccc_unknown_err", nil)
 	l1TxStrangeErrCounter             = metrics.NewRegisteredCounter("miner/skipped_txs/l1/strange_err", nil)
 
-	l2CommitNewWorkTimer                    = metrics.NewRegisteredTimer("miner/commit/new_work_all", nil)
-	l2CommitNewWorkL1CollectTimer           = metrics.NewRegisteredTimer("miner/commit/new_work_collect_l1", nil)
-	l2CommitNewWorkPrepareTimer             = metrics.NewRegisteredTimer("miner/commit/new_work_prepare", nil)
-	l2CommitNewWorkTidyPendingTxTimer       = metrics.NewRegisteredTimer("miner/commit/new_work_tidy_pending", nil)
-	l2CommitNewWorkCommitL1MsgTimer         = metrics.NewRegisteredTimer("miner/commit/new_work_commit_l1_msg", nil)
-	l2CommitNewWorkPrioritizedTxCommitTimer = metrics.NewRegisteredTimer("miner/commit/new_work_prioritized", nil)
-	l2CommitNewWorkRemoteLocalCommitTimer   = metrics.NewRegisteredTimer("miner/commit/new_work_remote_local", nil)
-	l2CommitNewWorkLocalPriceAndNonceTimer  = metrics.NewRegisteredTimer("miner/commit/new_work_local_price_and_nonce", nil)
-	l2CommitNewWorkRemotePriceAndNonceTimer = metrics.NewRegisteredTimer("miner/commit/new_work_remote_price_and_nonce", nil)
-	l2CommitTimer                           = metrics.NewRegisteredTimer("miner/commit/all", nil)
-	l2ResultTimer                           = metrics.NewRegisteredTimer("miner/result/all", nil)
+	collectL1MsgsTimer = metrics.NewRegisteredTimer("miner/collect_l1_msgs", nil)
+	prepareTimer       = metrics.NewRegisteredTimer("miner/prepare", nil)
+	collectL2Timer     = metrics.NewRegisteredTimer("miner/collect_l2_txns", nil)
+	l2CommitTimer      = metrics.NewRegisteredTimer("miner/commit", nil)
+	resultTimer        = metrics.NewRegisteredTimer("miner/result", nil)
+
+	commitReasonCCCCounter      = metrics.NewRegisteredCounter("miner/commit_reason_ccc", nil)
+	commitReasonDeadlineCounter = metrics.NewRegisteredCounter("miner/commit_reason_deadline", nil)
 )
 
 // task contains all information for consensus engine sealing and result submitting.
@@ -585,7 +582,7 @@ func (w *worker) resultLoop() {
 			// Commit block and state to database.
 			_, err := w.chain.WriteBlockWithState(block, receipts, logs, task.state, true)
 			if err != nil {
-				l2ResultTimer.Update(time.Since(startTime))
+				resultTimer.Update(time.Since(startTime))
 				log.Error("Failed writing block to chain", "err", err)
 				continue
 			}
@@ -598,7 +595,7 @@ func (w *worker) resultLoop() {
 			// Insert the block into the set of pending ones to resultLoop for confirmations
 			w.unconfirmed.Insert(block.NumberU64(), block.Hash())
 
-			l2ResultTimer.Update(time.Since(startTime))
+			resultTimer.Update(time.Since(startTime))
 
 		case <-w.exitCh:
 			return
@@ -636,10 +633,6 @@ func (w *worker) startNewPipeline(timestamp int64) {
 		w.currentPipeline = nil
 	}
 
-	defer func(t0 time.Time) {
-		l2CommitNewWorkTimer.Update(time.Since(t0))
-	}(time.Now())
-
 	parent := w.chain.CurrentBlock()
 
 	num := parent.Number()
@@ -669,7 +662,7 @@ func (w *worker) startNewPipeline(timestamp int64) {
 		header.Coinbase = w.coinbase
 	}
 
-	common.WithTimer(l2CommitNewWorkPrepareTimer, func() {
+	common.WithTimer(prepareTimer, func() {
 		if err := w.engine.Prepare(w.chain, header); err != nil {
 			log.Error("Failed to prepare header for mining", "err", err)
 			return
@@ -696,17 +689,10 @@ func (w *worker) startNewPipeline(timestamp int64) {
 		return
 	}
 
-	w.currentPipelineStart = time.Now()
-	w.currentPipeline = pipeline.NewPipeline(w.chain, w.chain.GetVMConfig(), parentState, &w.coinbase, header, w.getCCC()).WithBeforeTxHook(w.beforeTxHook)
-	if err := w.currentPipeline.Start(time.Unix(int64(header.Time), 0)); err != nil {
-		log.Error("failed to start pipeline", "err", err)
-		return
-	}
-
 	// fetch l1Txs
 	var l1Messages []types.L1MessageTx
 	if w.chainConfig.Scroll.ShouldIncludeL1Messages() {
-		common.WithTimer(l2CommitNewWorkL1CollectTimer, func() {
+		common.WithTimer(collectL1MsgsTimer, func() {
 			l1Messages = w.collectPendingL1Messages(*rawdb.ReadFirstQueueIndexNotInL2Block(w.eth.ChainDb(), parent.Hash()))
 		})
 	}
@@ -714,13 +700,6 @@ func (w *worker) startNewPipeline(timestamp int64) {
 	tidyPendingStart := time.Now()
 	// Fill the block with all available pending transactions.
 	pending := w.eth.TxPool().Pending(false)
-	// Short circuit if there is no available pending transactions.
-	// But if we disable empty precommit already, ignore it. Since
-	// empty block is necessary to keep the liveness of the network.
-	if len(pending) == 0 && len(l1Messages) == 0 && atomic.LoadUint32(&w.noempty) == 0 {
-		l2CommitNewWorkTidyPendingTxTimer.UpdateSince(tidyPendingStart)
-		return
-	}
 	// Split the pending transactions into locals and remotes
 	localTxs, remoteTxs := make(map[common.Address]types.Transactions), pending
 	for _, account := range w.eth.TxPool().Locals() {
@@ -729,9 +708,22 @@ func (w *worker) startNewPipeline(timestamp int64) {
 			localTxs[account] = txs
 		}
 	}
-	l2CommitNewWorkTidyPendingTxTimer.UpdateSince(tidyPendingStart)
+	collectL2Timer.UpdateSince(tidyPendingStart)
 
-	commitL1MsgStart := time.Now()
+	w.currentPipelineStart = time.Now()
+	w.currentPipeline = pipeline.NewPipeline(w.chain, w.chain.GetVMConfig(), parentState, &w.coinbase, header, w.getCCC()).WithBeforeTxHook(w.beforeTxHook)
+	if err := w.currentPipeline.Start(time.Unix(int64(header.Time), 0)); err != nil {
+		log.Error("failed to start pipeline", "err", err)
+		return
+	}
+
+	// Short circuit if there is no available pending transactions.
+	// But if we disable empty precommit already, ignore it. Since
+	// empty block is necessary to keep the liveness of the network.
+	if len(localTxs) == 0 && len(remoteTxs) == 0 && len(l1Messages) == 0 && atomic.LoadUint32(&w.noempty) == 0 {
+		return
+	}
+
 	if w.chainConfig.Scroll.ShouldIncludeL1Messages() && len(l1Messages) > 0 {
 		log.Trace("Processing L1 messages for inclusion", "count", len(l1Messages))
 		txs, err := types.NewL1MessagesByQueueIndex(l1Messages)
@@ -742,14 +734,11 @@ func (w *worker) startNewPipeline(timestamp int64) {
 
 		if result := w.currentPipeline.TryPushTxns(txs, w.onTxFailingInPipeline); result != nil {
 			w.handleCCCResult(result)
-			l2CommitNewWorkCommitL1MsgTimer.UpdateSince(commitL1MsgStart)
 			return
 		}
 	}
-	l2CommitNewWorkCommitL1MsgTimer.UpdateSince(commitL1MsgStart)
 	signer := types.MakeSigner(w.chainConfig, header.Number)
 
-	prioritizedTxStart := time.Now()
 	if w.prioritizedTx != nil && w.currentPipeline.Header.Number.Uint64() > w.prioritizedTx.blockNumber {
 		w.prioritizedTx = nil
 	}
@@ -758,35 +747,25 @@ func (w *worker) startNewPipeline(timestamp int64) {
 		txList := map[common.Address]types.Transactions{from: []*types.Transaction{w.prioritizedTx.tx}}
 		txs := types.NewTransactionsByPriceAndNonce(signer, txList, header.BaseFee)
 		if result := w.currentPipeline.TryPushTxns(txs, w.onTxFailingInPipeline); result != nil {
-			l2CommitNewWorkPrioritizedTxCommitTimer.UpdateSince(prioritizedTxStart)
 			w.handleCCCResult(result)
 			return
 		}
 	}
-	l2CommitNewWorkPrioritizedTxCommitTimer.UpdateSince(prioritizedTxStart)
 
-	remoteLocalStart := time.Now()
 	if len(localTxs) > 0 {
-		localTxPriceAndNonceStart := time.Now()
 		txs := types.NewTransactionsByPriceAndNonce(signer, localTxs, header.BaseFee)
-		l2CommitNewWorkLocalPriceAndNonceTimer.UpdateSince(localTxPriceAndNonceStart)
 		if result := w.currentPipeline.TryPushTxns(txs, w.onTxFailingInPipeline); result != nil {
-			l2CommitNewWorkRemoteLocalCommitTimer.UpdateSince(remoteLocalStart)
 			w.handleCCCResult(result)
 			return
 		}
 	}
 	if len(remoteTxs) > 0 {
-		remoteTxPriceAndNonceStart := time.Now()
 		txs := types.NewTransactionsByPriceAndNonce(signer, remoteTxs, header.BaseFee)
-		l2CommitNewWorkRemotePriceAndNonceTimer.UpdateSince(remoteTxPriceAndNonceStart)
 		if result := w.currentPipeline.TryPushTxns(txs, w.onTxFailingInPipeline); result != nil {
-			l2CommitNewWorkRemoteLocalCommitTimer.UpdateSince(remoteLocalStart)
 			w.handleCCCResult(result)
 			return
 		}
 	}
-	l2CommitNewWorkRemoteLocalCommitTimer.UpdateSince(remoteLocalStart)
 }
 
 func (w *worker) handleCCCResult(res *pipeline.Result) error {
@@ -856,6 +835,12 @@ func (w *worker) commit(res *pipeline.Result) error {
 	defer func(t0 time.Time) {
 		l2CommitTimer.Update(time.Since(t0))
 	}(time.Now())
+
+	if res.CCCErr != nil {
+		commitReasonCCCCounter.Inc(1)
+	} else {
+		commitReasonDeadlineCounter.Inc(1)
+	}
 
 	block, err := w.engine.FinalizeAndAssemble(w.chain, res.FinalBlock.Header, res.FinalBlock.State,
 		res.FinalBlock.Txs, nil, res.FinalBlock.Receipts)
