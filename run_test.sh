@@ -6,7 +6,7 @@ wget https://github.com/scroll-tech/da-codec/releases/download/v0.0.0-rc0-ubuntu
 
 # Set the environment variable
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$(pwd)
-export CGO_LDFLAGS="-L$(pwd) -lscroll_zstd -lzktrie"
+export CGO_LDFLAGS="-L$(pwd) -Wl,-rpath=$(pwd)"
 
 # Download and install the project dependencies
 go run build/ci.go install

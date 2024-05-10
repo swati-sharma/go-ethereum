@@ -20,7 +20,7 @@ nccc_geth: libzstd ## geth without circuit capacity checker
 	@echo "Done building."
 	@echo "Run \"$(GOBIN)/geth\" to launch geth."
 
-geth: libzkp
+geth: libzkp libzstd
 	$(GORUN) build/ci.go install -buildtags circuit_capacity_checker ./cmd/geth
 	@echo "Done building."
 	@echo "Run \"$(GOBIN)/geth\" to launch geth."
