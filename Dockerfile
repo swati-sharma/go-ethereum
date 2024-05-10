@@ -29,10 +29,11 @@ COPY --from=zkp-builder /app/target/release/libzkp.so /usr/local/lib/
 COPY --from=zkp-builder /app/target/release/libzktrie.so /usr/local/lib/
 ENV LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib/
 
-RUN wget https://github.com/scroll-tech/da-codec/releases/download/v0.0.0-rc0-ubuntu20.04/libzktrie.so
-RUN wget https://github.com/scroll-tech/da-codec/releases/download/v0.0.0-rc0-ubuntu20.04/libscroll_zstd.so
-ENV LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$(PWD)
-ENV CGO_LDFLAGS=-"L$(PWD) -Wl,-rpath=$(PWD)"
+RUN mkdir /opt/lib
+RUN wget -O /opt/lib/libzktrie.so https://github.com/scroll-tech/da-codec/releases/download/v0.0.0-rc0-ubuntu20.04/libzktrie.so
+RUN wget -O /opt/lib/libscroll_zstd.so https://github.com/scroll-tech/da-codec/releases/download/v0.0.0-rc0-ubuntu20.04/libscroll_zstd.so
+ENV LD_LIBRARY_PATH=/opt/lib
+ENV CGO_LDFLAGS="-L/opt/lib -Wl,-rpath=/opt/lib"
 RUN cd /go-ethereum && env GO111MODULE=on go run build/ci.go install -buildtags circuit_capacity_checker ./cmd/geth
 
 # Pull Geth into a second stage deploy alpine container
@@ -46,10 +47,12 @@ COPY --from=zkp-builder /app/target/release/libzkp.so /usr/local/lib/
 COPY --from=zkp-builder /app/target/release/libzktrie.so /usr/local/lib/
 ENV LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib/
 
-RUN wget https://github.com/scroll-tech/da-codec/releases/download/v0.0.0-rc0-ubuntu20.04/libzktrie.so
-RUN wget https://github.com/scroll-tech/da-codec/releases/download/v0.0.0-rc0-ubuntu20.04/libscroll_zstd.so
-ENV LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$(PWD)
-ENV CGO_LDFLAGS=-"L$(PWD) -Wl,-rpath=$(PWD)"
+RUN mkdir /opt/lib
+RUN apt-get update && apt-get install -y wget
+RUN wget -O /opt/lib/libzktrie.so https://github.com/scroll-tech/da-codec/releases/download/v0.0.0-rc0-ubuntu20.04/libzktrie.so
+RUN wget -O /opt/lib/libscroll_zstd.so https://github.com/scroll-tech/da-codec/releases/download/v0.0.0-rc0-ubuntu20.04/libscroll_zstd.so
+ENV LD_LIBRARY_PATH=/opt/lib
+ENV CGO_LDFLAGS="-L/opt/lib -Wl,-rpath=/opt/lib"
 
 EXPOSE 8545 8546 30303 30303/udp
 ENTRYPOINT ["geth"]
