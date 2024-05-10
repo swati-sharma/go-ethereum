@@ -40,7 +40,7 @@ RUN cd /go-ethereum && env GO111MODULE=on go run build/ci.go install -buildtags 
 FROM ubuntu:20.04
 
 RUN apt-get -qq update \
-    && apt-get -qq install -y --no-install-recommends ca-certificates
+    && apt-get -qq install -y --no-install-recommends ca-certificates wget
 
 COPY --from=builder /go-ethereum/build/bin/geth /usr/local/bin/
 COPY --from=zkp-builder /app/target/release/libzkp.so /usr/local/lib/
@@ -48,7 +48,6 @@ COPY --from=zkp-builder /app/target/release/libzktrie.so /usr/local/lib/
 ENV LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib/
 
 RUN mkdir /opt/lib
-RUN apt-get update && apt-get install -y wget
 RUN wget -O /opt/lib/libzktrie.so https://github.com/scroll-tech/da-codec/releases/download/v0.0.0-rc0-ubuntu20.04/libzktrie.so
 RUN wget -O /opt/lib/libscroll_zstd.so https://github.com/scroll-tech/da-codec/releases/download/v0.0.0-rc0-ubuntu20.04/libscroll_zstd.so
 ENV LD_LIBRARY_PATH=/opt/lib
