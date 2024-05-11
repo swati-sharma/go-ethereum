@@ -43,6 +43,7 @@ type Backend interface {
 	TxPool() *core.TxPool
 	ChainDb() ethdb.Database
 	SyncService() *sync_service.SyncService
+	L1Client() sync_service.EthClient
 }
 
 // Config is the configuration parameters of mining.
@@ -75,6 +76,7 @@ type Miner struct {
 }
 
 func New(eth Backend, config *Config, chainConfig *params.ChainConfig, mux *event.TypeMux, engine consensus.Engine, isLocalBlock func(block *types.Block) bool) *Miner {
+	//system_contracts.NewL1BlocksWorker(context.Background(), )
 	miner := &Miner{
 		eth:     eth,
 		mux:     mux,
