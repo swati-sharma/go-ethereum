@@ -30,7 +30,7 @@ RUN mkdir -p /scroll/lib
 
 COPY --from=zkp-builder /app/target/release/libzkp.so /scroll/lib/
 COPY --from=zkp-builder /app/target/release/libzktrie.so /scroll/lib/
-RUN wget -O /scroll/libzstd/libscroll_zstd.so https://github.com/scroll-tech/da-codec/releases/download/v0.0.0-rc0-ubuntu20.04/libscroll_zstd.so
+RUN wget -O /scroll/lib/libscroll_zstd.so https://github.com/scroll-tech/da-codec/releases/download/v0.0.0-rc0-ubuntu20.04/libscroll_zstd.so
 
 ENV LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/scroll/lib/
 ENV CGO_LDFLAGS="-L/scroll/lib/ -Wl,-rpath=/scroll/lib/"
@@ -49,7 +49,7 @@ RUN mkdir -p /scroll/lib
 
 COPY --from=zkp-builder /app/target/release/libzkp.so /scroll/lib/
 COPY --from=zkp-builder /app/target/release/libzktrie.so /scroll/lib/
-RUN wget -O /scroll/libzstd/libscroll_zstd.so https://github.com/scroll-tech/da-codec/releases/download/v0.0.0-rc0-ubuntu20.04/libscroll_zstd.so
+RUN wget -O /scroll/lib/libscroll_zstd.so https://github.com/scroll-tech/da-codec/releases/download/v0.0.0-rc0-ubuntu20.04/libscroll_zstd.so
 
 ENV LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/scroll/lib/
 ENV CGO_LDFLAGS="-L/scroll/lib/ -Wl,-rpath=/scroll/lib/"
