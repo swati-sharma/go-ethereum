@@ -510,6 +510,24 @@ func decodeBlockRangesFromEncodedChunks(codecVersion encoding.CodecVersion, chun
 				StartBlockNumber: daBlocks[0].BlockNumber,
 				EndBlockNumber:   daBlocks[len(daBlocks)-1].BlockNumber,
 			})
+		case encoding.CodecV2:
+			if len(chunk) != 1+numBlocks*60 {
+				return nil, fmt.Errorf("invalid chunk byte length, expected: %v, got: %v", 1+numBlocks*60, len(chunk))
+			}
+			daBlocks := make([]*codecv2.DABlock, numBlocks)
+			for i := 0; i < numBlocks; i++ {
+				startIdx := 1 + i*60 // add 1 to skip numBlocks byte
+				endIdx := startIdx + 60
+				daBlocks[i] = &codecv2.DABlock{}
+				if err := daBlocks[i].Decode(chunk[startIdx:endIdx]); err != nil {
+					return nil, err
+				}
+			}
+
+			chunkBlockRanges = append(chunkBlockRanges, &rawdb.ChunkBlockRange{
+				StartBlockNumber: daBlocks[0].BlockNumber,
+				EndBlockNumber:   daBlocks[len(daBlocks)-1].BlockNumber,
+			})
 		default:
 			return nil, fmt.Errorf("unexpected batch version %v", codecVersion)
 		}
