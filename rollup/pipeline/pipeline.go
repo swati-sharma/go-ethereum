@@ -89,6 +89,8 @@ func NewPipeline(
 		coinbase:       coinbase,
 		state:          state,
 		gasPool:        new(core.GasPool).AddGas(header.GasLimit),
+
+		ResultCh: make(chan *Result),
 	}
 }
 
@@ -106,7 +108,8 @@ func (p *Pipeline) Start(deadline time.Time) error {
 		return err
 	}
 	p.applyStageRespCh = applyStageRespCh
-	p.ResultCh = p.cccStage(incrementCh, deadline)
+
+	p.cccStageLoop(incrementCh, deadline)
 	return nil
 }
 
@@ -296,16 +299,16 @@ type Result struct {
 	FinalBlock *PendingBlockIncrement
 }
 
-func (p *Pipeline) cccStage(increments <-chan *PendingBlockIncrement, deadline time.Time) chan *Result {
+func (p *Pipeline) cccStageLoop(increments <-chan *PendingBlockIncrement, deadline time.Time) {
 	p.ccc.Reset()
-	resultCh := make(chan *Result)
+
 	var lastIncrement *PendingBlockIncrement
 	var lastAccRows *types.RowConsumption
 	var deadlineReached bool
 
 	go func() {
 		defer func() {
-			close(resultCh)
+			close(p.ResultCh)
 			lifetimeTimer.UpdateSince(p.start)
 		}()
 		for {
@@ -314,7 +317,7 @@ func (p *Pipeline) cccStage(increments <-chan *PendingBlockIncrement, deadline t
 			case <-time.After(time.Until(deadline)):
 				cccIdleTimer.UpdateSince(idleStart)
 				if lastIncrement != nil {
-					resultCh <- &Result{
+					p.ResultCh <- &Result{
 						Rows:       lastAccRows,
 						FinalBlock: lastIncrement,
 					}
@@ -333,7 +336,7 @@ func (p *Pipeline) cccStage(increments <-chan *PendingBlockIncrement, deadline t
 						lastTxn := increment.Txs[increment.Txs.Len()-1]
 						cccTimer.UpdateSince(cccStart)
 						if err != nil {
-							resultCh <- &Result{
+							p.ResultCh <- &Result{
 								OverflowingTx:    lastTxn,
 								OverflowingTrace: increment.LastTrace,
 								CCCErr:           err,
@@ -350,7 +353,7 @@ func (p *Pipeline) cccStage(increments <-chan *PendingBlockIncrement, deadline t
 
 				// immediately close the block if deadline reached or apply staged is done
 				if increment == nil || deadlineReached {
-					resultCh <- &Result{
+					p.ResultCh <- &Result{
 						Rows:       lastAccRows,
 						FinalBlock: lastIncrement,
 					}
@@ -359,7 +362,6 @@ func (p *Pipeline) cccStage(increments <-chan *PendingBlockIncrement, deadline t
 			}
 		}
 	}()
-	return resultCh
 }
 
 func (p *Pipeline) traceAndApply(tx *types.Transaction) (*types.Receipt, *types.BlockTrace, error) {
