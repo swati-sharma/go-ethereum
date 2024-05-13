@@ -131,7 +131,12 @@ func (p *Pipeline) TryPushTxns(txs types.OrderedTransactionSet, onFailingTxn fun
 				p.TxnQueue = nil
 				return nil
 			}
-			txs.Pop()
+
+			if tx.IsL1MessageTx() {
+				txs.Shift()
+			} else {
+				txs.Pop()
+			}
 		}
 	}
 
