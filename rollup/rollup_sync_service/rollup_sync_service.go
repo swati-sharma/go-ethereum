@@ -327,6 +327,10 @@ func (s *RollupSyncService) getChunkRanges(batchIndex uint64, vLog *types.Log) (
 			return nil, fmt.Errorf("failed to get block by hash, block number: %v, block hash: %v, err: %w", vLog.BlockNumber, vLog.BlockHash.Hex(), err)
 		}
 
+		if block == nil {
+			return nil, fmt.Errorf("failed to get block by hash, block not found, block number: %v, block hash: %v", vLog.BlockNumber, vLog.BlockHash.Hex())
+		}
+
 		found := false
 		for _, txInBlock := range block.Transactions() {
 			if txInBlock.Hash() == vLog.TxHash {
