@@ -26,7 +26,7 @@ FROM scrolltech/go-rust-builder:go-1.20-rust-nightly-2022-12-10 as builder
 
 ADD . /go-ethereum
 
-RUN mkdir -p /scroll/lib
+RUN mkdir -p /scroll/lib/
 
 COPY --from=zkp-builder /app/target/release/libzkp.so /scroll/lib/
 COPY --from=zkp-builder /app/target/release/libzktrie.so /scroll/lib/
@@ -45,7 +45,7 @@ RUN apt-get -qq update \
 
 COPY --from=builder /go-ethereum/build/bin/geth /usr/local/bin/
 
-RUN mkdir -p /scroll/lib
+RUN mkdir -p /scroll/lib/
 
 COPY --from=zkp-builder /app/target/release/libzkp.so /scroll/lib/
 COPY --from=zkp-builder /app/target/release/libzktrie.so /scroll/lib/
