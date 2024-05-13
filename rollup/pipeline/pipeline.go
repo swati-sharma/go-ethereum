@@ -63,6 +63,7 @@ type Pipeline struct {
 	// com channels
 	TxnQueue         chan *types.Transaction
 	applyStageRespCh chan error
+	incrementCh      chan *PendingBlockIncrement
 	ResultCh         chan *Result
 
 	// Test hooks
@@ -90,7 +91,10 @@ func NewPipeline(
 		state:          state,
 		gasPool:        new(core.GasPool).AddGas(header.GasLimit),
 
-		ResultCh: make(chan *Result),
+		TxnQueue:         make(chan *types.Transaction),
+		applyStageRespCh: make(chan error),
+		incrementCh:      make(chan *PendingBlockIncrement),
+		ResultCh:         make(chan *Result),
 	}
 }
 
@@ -101,15 +105,15 @@ func (p *Pipeline) WithBeforeTxHook(beforeTxHook func()) *Pipeline {
 
 func (p *Pipeline) Start(deadline time.Time) error {
 	p.start = time.Now()
-	p.TxnQueue = make(chan *types.Transaction)
-	applyStageRespCh, incrementCh, err := p.traceAndApplyStage(p.TxnQueue)
+
+	err := p.traceAndApplyStageLoop()
 	if err != nil {
 		log.Error("Failed starting traceAndApplyStage", "err", err)
 		return err
 	}
-	p.applyStageRespCh = applyStageRespCh
 
-	p.cccStageLoop(incrementCh, deadline)
+	p.cccStageLoop(deadline)
+
 	return nil
 }
 
@@ -189,21 +193,19 @@ type PendingBlockIncrement struct {
 	CoalescedLogs []*types.Log
 }
 
-func (p *Pipeline) traceAndApplyStage(txsIn <-chan *types.Transaction) (chan error, chan *PendingBlockIncrement, error) {
+func (p *Pipeline) traceAndApplyStageLoop() error {
 	p.state.StartPrefetcher("miner")
-	incrementCh := make(chan *PendingBlockIncrement)
-	resCh := make(chan error)
 	go func() {
 		defer func() {
-			close(incrementCh)
-			close(resCh)
+			close(p.incrementCh)
+			close(p.applyStageRespCh)
 			p.state.StopPrefetcher()
 		}()
 
 		var tx *types.Transaction
 		for {
 			applyIdleTimer.Time(func() {
-				tx = <-txsIn
+				tx = <-p.TxnQueue
 			})
 			if tx == nil {
 				return
@@ -224,13 +226,13 @@ func (p *Pipeline) traceAndApplyStage(txsIn <-chan *types.Transaction) (chan err
 
 			if tx.IsL1MessageTx() && tx.AsL1MessageTx().QueueIndex != p.nextL1MsgIndex {
 				// Continue, we might still be able to include some L2 messages
-				resCh <- ErrUnexpectedL1MessageIndex
+				p.applyStageRespCh <- ErrUnexpectedL1MessageIndex
 				continue
 			}
 
 			if !tx.IsL1MessageTx() && !p.chain.Config().Scroll.IsValidBlockSize(p.blockSize+tx.Size()) {
 				// can't fit this txn in this block, silently ignore and continue looking for more txns
-				resCh <- nil
+				p.applyStageRespCh <- nil
 				continue
 			}
 
@@ -258,7 +260,7 @@ func (p *Pipeline) traceAndApplyStage(txsIn <-chan *types.Transaction) (chan err
 
 				stallStart := time.Now()
 				select {
-				case incrementCh <- &PendingBlockIncrement{
+				case p.incrementCh <- &PendingBlockIncrement{
 					LastTrace:      trace,
 					NextL1MsgIndex: p.nextL1MsgIndex,
 
@@ -268,7 +270,7 @@ func (p *Pipeline) traceAndApplyStage(txsIn <-chan *types.Transaction) (chan err
 					Receipts:      p.receipts,
 					CoalescedLogs: p.coalescedLogs,
 				}:
-				case tx = <-txsIn:
+				case tx = <-p.TxnQueue:
 					if tx != nil {
 						panic("shouldn't have happened")
 					}
@@ -284,10 +286,10 @@ func (p *Pipeline) traceAndApplyStage(txsIn <-chan *types.Transaction) (chan err
 				}
 			}
 			applyTimer.UpdateSince(applyStart)
-			resCh <- err
+			p.applyStageRespCh <- err
 		}
 	}()
-	return resCh, incrementCh, nil
+	return nil
 }
 
 type Result struct {
@@ -299,7 +301,7 @@ type Result struct {
 	FinalBlock *PendingBlockIncrement
 }
 
-func (p *Pipeline) cccStageLoop(increments <-chan *PendingBlockIncrement, deadline time.Time) {
+func (p *Pipeline) cccStageLoop(deadline time.Time) {
 	p.ccc.Reset()
 
 	var lastIncrement *PendingBlockIncrement
@@ -325,7 +327,7 @@ func (p *Pipeline) cccStageLoop(increments <-chan *PendingBlockIncrement, deadli
 				}
 				deadlineReached = true
 				deadline = time.Now().Add(time.Hour)
-			case increment := <-increments:
+			case increment := <-p.incrementCh:
 				cccIdleTimer.UpdateSince(idleStart)
 				cccStart := time.Now()
 				var accRows *types.RowConsumption
