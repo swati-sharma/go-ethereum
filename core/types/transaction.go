@@ -201,6 +201,8 @@ func (tx *Transaction) decodeTyped(b []byte) (TxData, error) {
 		inner = new(BlobTx)
 	case L1MessageTxType:
 		inner = new(L1MessageTx)
+	case SystemTxType:
+		inner = new(SystemTx)
 	default:
 		return nil, ErrTxTypeNotSupported
 	}

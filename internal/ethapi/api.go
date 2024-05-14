@@ -1363,6 +1363,9 @@ func NewRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 		msg := tx.AsL1MessageTx()
 		result.Sender = &msg.Sender
 		result.QueueIndex = (*hexutil.Uint64)(&msg.QueueIndex)
+	case types.SystemTxType:
+		msg := tx.AsSystemTx()
+		result.Sender = &msg.Sender
 	}
 	return result
 }

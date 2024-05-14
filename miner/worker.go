@@ -1352,6 +1352,7 @@ func (w *worker) collectPendingL1Messages(startIndex uint64) []types.L1MessageTx
 
 func (w *worker) emitSystemTxs(env *environment) []*types.SystemTx {
 	latestL1BlockNumberOnL2 := env.state.GetState(rcfg.L1BlocksAddress, rcfg.LatestBlockNumberSlot).Big().Uint64()
+	log.Info("Latest L1 block number on L2", "l1BlockNum", latestL1BlockNumberOnL2, "l2BlockNum", env.header.Number.Uint64())
 	return w.eth.SyncService().CollectL1BlocksTxs(latestL1BlockNumberOnL2, w.chainConfig.Scroll.L1Config.MaxNumL1BlocksTxPerBlock)
 }
 

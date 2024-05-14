@@ -101,6 +101,7 @@ func NewSyncService(ctx context.Context, genesisConfig *params.ChainConfig, node
 		return nil, fmt.Errorf("cannot get the state db: %w", err)
 	}
 	latestL1BlockNumOnL2 := state.GetState(rcfg.L1BlocksAddress, rcfg.LatestBlockNumberSlot).Big().Uint64()
+	log.Info("Latest L1 block number on L2", "l1BlockNum", latestL1BlockNumOnL2)
 
 	ctx, cancel := context.WithCancel(ctx)
 
@@ -204,8 +205,10 @@ func (s *SyncService) CollectL1BlocksTxs(latestL1BlockNumberOnL2, maxNumTxs uint
 	for i := 0; i < cnt; i++ {
 		ret[i] = s.l1BlocksPool.l1BlocksTxs[i].tx
 	}
+	s.l1BlocksPool.latestL1BlockNumOnL2 = latestL1BlockNumberOnL2
 	s.l1BlocksPool.pendingL1BlocksTxs = s.l1BlocksPool.l1BlocksTxs[:cnt]
 	s.l1BlocksPool.l1BlocksTxs = s.l1BlocksPool.l1BlocksTxs[cnt:]
+	log.Info("Collected L1Blocks txs", "cnt", len(ret), "remaining", len(s.l1BlocksPool.l1BlocksTxs))
 
 	return ret
 }
@@ -237,10 +240,14 @@ func (s *SyncService) fetchL1Blocks(latestConfirmed uint64) {
 	}
 	// query in batches
 	num := 0
-	for from := latestProcessedBlock + 1; from <= latestConfirmed; from += DefaultFetchBlockRange {
+	from := latestProcessedBlock + 1
+	for ; from <= latestConfirmed; {
 		cnt := DefaultFetchBlockRange
 		if cnt+uint64(len(s.l1BlocksPool.l1BlocksTxs)) > MaxNumCachedL1BlocksTx {
 			cnt = MaxNumCachedL1BlocksTx - uint64(len(s.l1BlocksPool.l1BlocksTxs))
+		}
+		if cnt == 0 {
+			break
 		}
 		to := from + cnt - 1
 		if to > latestConfirmed {
@@ -251,11 +258,12 @@ func (s *SyncService) fetchL1Blocks(latestConfirmed uint64) {
 			log.Warn("Failed to fetch L1Blocks in range", "fromBlock", from, "toBlock", to, "err", err)
 			return
 		}
-		log.Debug("Received new L1 blocks", "fromBlock", from, "toBlock", to, "count", len(l1BlocksTxs))
+		log.Info("Received new L1 blocks", "fromBlock", from, "toBlock", to, "count", len(l1BlocksTxs))
 		for i, tx := range l1BlocksTxs {
 			s.l1BlocksPool.l1BlocksTxs = append(s.l1BlocksPool.l1BlocksTxs, L1BlocksTx{tx, from + uint64(i)})
 		}
 		num += len(l1BlocksTxs)
+		from = to + 1
 	}
 
 	if num > 0 {
