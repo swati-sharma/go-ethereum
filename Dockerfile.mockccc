@@ -10,8 +10,9 @@ ADD . /go-ethereum
 
 RUN mkdir -p /scroll/lib/
 
+RUN apt-get -qq update && apt-get -qq install -y wget
 RUN wget -O /scroll/lib/libscroll_zstd.so https://github.com/scroll-tech/da-codec/releases/download/v0.0.0-rc0-ubuntu20.04/libscroll_zstd.so
-RUN wget -O /scroll/lib/libzktrie.so https://github.com/scroll-tech/da-codec/releases/download/v0.0.0-rc0-ubuntu20.04/libscroll_zstd.so
+RUN wget -O /scroll/lib/libzktrie.so https://github.com/scroll-tech/da-codec/releases/download/v0.0.0-rc0-ubuntu20.04/libzktrie.so
 
 ENV LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/scroll/lib/
 ENV CGO_LDFLAGS="-L/scroll/lib/ -Wl,-rpath=/scroll/lib/"
@@ -23,8 +24,9 @@ COPY --from=builder /go-ethereum/build/bin/geth /usr/local/bin/
 
 RUN mkdir -p /scroll/lib/
 
+RUN apt-get -qq update && apt-get -qq install -y wget
 RUN wget -O /scroll/lib/libscroll_zstd.so https://github.com/scroll-tech/da-codec/releases/download/v0.0.0-rc0-ubuntu20.04/libscroll_zstd.so
-RUN wget -O /scroll/lib/libzktrie.so https://github.com/scroll-tech/da-codec/releases/download/v0.0.0-rc0-ubuntu20.04/libscroll_zstd.so
+RUN wget -O /scroll/lib/libzktrie.so https://github.com/scroll-tech/da-codec/releases/download/v0.0.0-rc0-ubuntu20.04/libzktrie.so
 
 ENV LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/scroll/lib/
 ENV CGO_LDFLAGS="-L/scroll/lib/ -Wl,-rpath=/scroll/lib/"
