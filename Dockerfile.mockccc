@@ -15,7 +15,7 @@ RUN wget -O /scroll/lib/libscroll_zstd.so https://github.com/scroll-tech/da-code
 RUN wget -O /scroll/lib/libzktrie.so https://github.com/scroll-tech/da-codec/releases/download/v0.0.0-rc0-ubuntu20.04/libzktrie.so
 
 ENV LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/scroll/lib/
-ENV CGO_LDFLAGS="-L/scroll/lib/ -Wl,-rpath=/scroll/lib/"
+ENV CGO_LDFLAGS="-L/scroll/lib/ -Wl,-rpath,/scroll/lib/"
 
 # Pull Geth into a second stage deploy alpine container
 FROM ubuntu:20.04
@@ -29,7 +29,7 @@ RUN wget -O /scroll/lib/libscroll_zstd.so https://github.com/scroll-tech/da-code
 RUN wget -O /scroll/lib/libzktrie.so https://github.com/scroll-tech/da-codec/releases/download/v0.0.0-rc0-ubuntu20.04/libzktrie.so
 
 ENV LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/scroll/lib/
-ENV CGO_LDFLAGS="-L/scroll/lib/ -Wl,-rpath=/scroll/lib/"
+ENV CGO_LDFLAGS="-L/scroll/lib/ -Wl,-rpath,/scroll/lib/"
 
 EXPOSE 8545 8546 30303 30303/udp
 ENTRYPOINT ["geth"]

@@ -7,7 +7,7 @@ sudo wget -O /scroll/lib/libscroll_zstd.so https://github.com/scroll-tech/da-cod
 
 # Set the environment variable
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/scroll/lib/
-export CGO_LDFLAGS="-L/scroll/lib/ -Wl,-rpath=/scroll/lib/"
+export CGO_LDFLAGS="-L/scroll/lib/ -Wl,-rpath,/scroll/lib/"
 
 # Download and install the project dependencies
 go run build/ci.go install

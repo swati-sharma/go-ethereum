@@ -33,7 +33,7 @@ COPY --from=zkp-builder /app/target/release/libzktrie.so /scroll/lib/
 RUN wget -O /scroll/lib/libscroll_zstd.so https://github.com/scroll-tech/da-codec/releases/download/v0.0.0-rc0-ubuntu20.04/libscroll_zstd.so
 
 ENV LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/scroll/lib/
-ENV CGO_LDFLAGS="-L/scroll/lib/ -Wl,-rpath=/scroll/lib/"
+ENV CGO_LDFLAGS="-L/scroll/lib/ -Wl,-rpath,/scroll/lib/"
 
 RUN cd /go-ethereum && env GO111MODULE=on go run build/ci.go install -buildtags circuit_capacity_checker ./cmd/geth
 
@@ -52,7 +52,7 @@ COPY --from=zkp-builder /app/target/release/libzktrie.so /scroll/lib/
 RUN wget -O /scroll/lib/libscroll_zstd.so https://github.com/scroll-tech/da-codec/releases/download/v0.0.0-rc0-ubuntu20.04/libscroll_zstd.so
 
 ENV LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/scroll/lib/
-ENV CGO_LDFLAGS="-L/scroll/lib/ -Wl,-rpath=/scroll/lib/"
+ENV CGO_LDFLAGS="-L/scroll/lib/ -Wl,-rpath,/scroll/lib/"
 
 EXPOSE 8545 8546 30303 30303/udp
 ENTRYPOINT ["geth"]
