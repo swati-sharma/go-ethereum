@@ -3,8 +3,9 @@
 # Download .so files
 export LIBSCROLL_ZSTD_VERSION=v0.0.0-rc0-ubuntu20.04
 export SCROLL_LIB_PATH=/scroll/lib
+
 sudo mkdir -p $SCROLL_LIB_PATH
-LIBSCROLL_ZSTD_VERSION=v0.0.0-rc0-ubuntu20.04
+
 sudo wget -O $SCROLL_LIB_PATH/libzktrie.so https://github.com/scroll-tech/da-codec/releases/download/$LIBSCROLL_ZSTD_VERSION/libzktrie.so
 sudo wget -O $SCROLL_LIB_PATH/libscroll_zstd.so https://github.com/scroll-tech/da-codec/releases/download/$LIBSCROLL_ZSTD_VERSION/libscroll_zstd.so
 
