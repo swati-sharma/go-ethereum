@@ -15,8 +15,8 @@ libzkp:
 
 libzstd:
 	@sudo mkdir -p $(SCROLL_LIB_PATH)
-	@wget -O $(SCROLL_LIB_PATH)/libzktrie.so https://github.com/scroll-tech/da-codec/releases/download/$(LIBSCROLL_ZSTD_VERSION)/libzktrie.so
-	@wget -O $(SCROLL_LIB_PATH)/libscroll_zstd.so https://github.com/scroll-tech/da-codec/releases/download/$(LIBSCROLL_ZSTD_VERSION)/libscroll_zstd.so
+	@sudo wget -O $(SCROLL_LIB_PATH)/libzktrie.so https://github.com/scroll-tech/da-codec/releases/download/$(LIBSCROLL_ZSTD_VERSION)/libzktrie.so
+	@sudo wget -O $(SCROLL_LIB_PATH)/libscroll_zstd.so https://github.com/scroll-tech/da-codec/releases/download/$(LIBSCROLL_ZSTD_VERSION)/libscroll_zstd.so
 
 nccc_geth: libzstd ## geth without circuit capacity checker
 	@LD_LIBRARY_PATH="$(LD_LIBRARY_PATH):$(SCROLL_LIB_PATH)" CGO_LDFLAGS="-L$(SCROLL_LIB_PATH) -Wl,-rpath,$(SCROLL_LIB_PATH)" $(GORUN) build/ci.go install ./cmd/geth
