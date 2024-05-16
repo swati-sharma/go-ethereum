@@ -8,16 +8,18 @@ GOBIN = ./build/bin
 GO ?= latest
 GORUN = go run
 LIBSCROLL_ZSTD_VERSION = v0.0.0-rc0-ubuntu20.04
+SCROLL_LIB_PATH = /scroll/lib
 
 libzkp:
 	cd $(PWD)/rollup/circuitcapacitychecker/libzkp && make libzkp
 
 libzstd:
-	@wget https://github.com/scroll-tech/da-codec/releases/download/$(LIBSCROLL_ZSTD_VERSION)/libzktrie.so
-	@wget https://github.com/scroll-tech/da-codec/releases/download/$(LIBSCROLL_ZSTD_VERSION)/libscroll_zstd.so
+	@mkdir -p $(SCROLL_LIB_PATH)
+	@wget -O $(SCROLL_LIB_PATH)/libzktrie.so https://github.com/scroll-tech/da-codec/releases/download/$(LIBSCROLL_ZSTD_VERSION)/libzktrie.so
+	@wget -O $(SCROLL_LIB_PATH)/libscroll_zstd.so https://github.com/scroll-tech/da-codec/releases/download/$(LIBSCROLL_ZSTD_VERSION)/libscroll_zstd.so
 
 nccc_geth: libzstd ## geth without circuit capacity checker
-	@LD_LIBRARY_PATH="$(LD_LIBRARY_PATH):$(PWD)" CGO_LDFLAGS="-L$(PWD) -Wl,-rpath,$(PWD)" $(GORUN) build/ci.go install ./cmd/geth
+	@LD_LIBRARY_PATH="$(LD_LIBRARY_PATH):$(SCROLL_LIB_PATH)" CGO_LDFLAGS="-L$(SCROLL_LIB_PATH) -Wl,-rpath,$(SCROLL_LIB_PATH)" $(GORUN) build/ci.go install ./cmd/geth
 	@echo "Done building."
 	@echo "Run \"$(GOBIN)/geth\" to launch geth."
 
