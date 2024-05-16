@@ -14,7 +14,7 @@ libzkp:
 	cd $(PWD)/rollup/circuitcapacitychecker/libzkp && make libzkp
 
 libzstd:
-	@mkdir -p $(SCROLL_LIB_PATH)
+	@sudo mkdir -p $(SCROLL_LIB_PATH)
 	@wget -O $(SCROLL_LIB_PATH)/libzktrie.so https://github.com/scroll-tech/da-codec/releases/download/$(LIBSCROLL_ZSTD_VERSION)/libzktrie.so
 	@wget -O $(SCROLL_LIB_PATH)/libscroll_zstd.so https://github.com/scroll-tech/da-codec/releases/download/$(LIBSCROLL_ZSTD_VERSION)/libscroll_zstd.so
 
