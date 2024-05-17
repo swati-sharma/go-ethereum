@@ -1041,11 +1041,11 @@ func (w *worker) commitTransactions(txs types.OrderedTransactionSet, coinbase co
 		l2CommitTxsTimer.Update(time.Since(t0))
 	}(time.Now())
 
-	var circuitCapacityReached bool
+	var circuitCapacityOrBlockTimeReached bool
 
 	// Short circuit if current is nil
 	if w.current == nil {
-		return true, circuitCapacityReached
+		return true, circuitCapacityOrBlockTimeReached
 	}
 
 	gasLimit := w.current.header.GasLimit
@@ -1080,12 +1080,12 @@ loop:
 					inc:   true,
 				}
 			}
-			return atomic.LoadInt32(interrupt) == commitInterruptNewHead, circuitCapacityReached
+			return atomic.LoadInt32(interrupt) == commitInterruptNewHead, circuitCapacityOrBlockTimeReached
 		}
 		// seal block early if we're over time
 		// note: current.header.Time = max(parent.Time + cliquePeriod, now())
 		if w.current.tcount > 0 && w.chainConfig.Clique != nil && uint64(time.Now().Unix()) > w.current.header.Time {
-			circuitCapacityReached = true // skip subsequent invocations of commitTransactions
+			circuitCapacityOrBlockTimeReached = true // skip subsequent invocations of commitTransactions
 			break
 		}
 		// If we don't have enough gas for any further transactions then we're done
@@ -1131,7 +1131,7 @@ loop:
 			continue
 		}
 		// Start executing the transaction
-		w.current.state.Prepare(tx.Hash(), w.current.tcount)
+		w.current.state.SetTxContext(tx.Hash(), w.current.tcount)
 
 		logs, traces, err := w.commitTransaction(tx, coinbase)
 		switch {
@@ -1209,7 +1209,7 @@ loop:
 				}
 				atomic.AddInt32(&w.newTxs, int32(1))
 
-				circuitCapacityReached = true
+				circuitCapacityOrBlockTimeReached = true
 				break loop
 			} else {
 				// 2. Circuit capacity limit reached in a block, and it's the first tx: skip the tx
@@ -1235,7 +1235,7 @@ loop:
 				// Reset ccc so that we can process other transactions for this block
 				w.circuitCapacityChecker.Reset()
 				log.Trace("Worker reset ccc", "id", w.circuitCapacityChecker.ID)
-				circuitCapacityReached = false
+				circuitCapacityOrBlockTimeReached = false
 
 				// Store skipped transaction in local db
 				if w.config.StoreSkippedTxTraces {
@@ -1263,7 +1263,7 @@ loop:
 			// Normally we would do `txs.Shift()` here.
 			// However, after `ErrUnknown`, ccc might remain in an
 			// inconsistent state, so we cannot pack more transactions.
-			circuitCapacityReached = true
+			circuitCapacityOrBlockTimeReached = true
 			w.checkCurrentTxNumWithCCC(w.current.tcount)
 			break loop
 
@@ -1283,7 +1283,7 @@ loop:
 			// However, after `ErrUnknown`, ccc might remain in an
 			// inconsistent state, so we cannot pack more transactions.
 			w.eth.TxPool().RemoveTx(tx.Hash(), true)
-			circuitCapacityReached = true
+			circuitCapacityOrBlockTimeReached = true
 			w.checkCurrentTxNumWithCCC(w.current.tcount)
 			break loop
 
@@ -1331,7 +1331,7 @@ loop:
 	if interrupt != nil {
 		w.resubmitAdjustCh <- &intervalAdjust{inc: false}
 	}
-	return false, circuitCapacityReached
+	return false, circuitCapacityOrBlockTimeReached
 }
 
 func (w *worker) checkCurrentTxNumWithCCC(expected int) {
@@ -1483,7 +1483,7 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 
 	tidyPendingStart := time.Now()
 	// Fill the block with all available pending transactions.
-	pending := w.eth.TxPool().Pending(true)
+	pending := w.eth.TxPool().PendingWithMax(false, w.config.MaxAccountsNum)
 	// Short circuit if there is no available pending transactions.
 	// But if we disable empty precommit already, ignore it. Since
 	// empty block is necessary to keep the liveness of the network.
@@ -1503,14 +1503,14 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 	}
 	l2CommitNewWorkTidyPendingTxTimer.UpdateSince(tidyPendingStart)
 
-	var skipCommit, circuitCapacityReached bool
+	var skipCommit, circuitCapacityOrBlockTimeReached bool
 
 	commitSystemTxStart := time.Now()
 	if w.chainConfig.Scroll.SystemTxEnabled() {
 		log.Trace("Processing SystemTxs for inclusion", "count", len(systemTxs))
 
 		txs := types.NewOrderedSystemTxs(systemTxs)
-		skipCommit, circuitCapacityReached = w.commitTransactions(txs, w.coinbase, interrupt)
+		skipCommit, circuitCapacityOrBlockTimeReached = w.commitTransactions(txs, w.coinbase, interrupt)
 		// Todo: system txs should not be reverted. We probably need to handle if revert happens
 		if skipCommit {
 			l2CommitNewWorkCommitSystemTxTimer.UpdateSince(commitSystemTxStart)
@@ -1520,14 +1520,14 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 	l2CommitNewWorkCommitSystemTxTimer.UpdateSince(commitSystemTxStart)
 
 	commitL1MsgStart := time.Now()
-	if w.chainConfig.Scroll.ShouldIncludeL1Messages() && len(l1Messages) > 0 && !circuitCapacityReached {
+	if w.chainConfig.Scroll.ShouldIncludeL1Messages() && len(l1Messages) > 0 && !circuitCapacityOrBlockTimeReached {
 		log.Trace("Processing L1 messages for inclusion", "count", len(l1Messages))
 		txs, err := types.NewL1MessagesByQueueIndex(l1Messages)
 		if err != nil {
 			log.Error("Failed to create L1 message set", "l1Messages", l1Messages, "err", err)
 			return
 		}
-		skipCommit, circuitCapacityReached = w.commitTransactions(txs, w.coinbase, interrupt)
+		skipCommit, circuitCapacityOrBlockTimeReached = w.commitTransactions(txs, w.coinbase, interrupt)
 		if skipCommit {
 			l2CommitNewWorkCommitL1MsgTimer.UpdateSince(commitL1MsgStart)
 			return
@@ -1539,12 +1539,12 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 	if w.prioritizedTx != nil && w.current.header.Number.Uint64() > w.prioritizedTx.blockNumber {
 		w.prioritizedTx = nil
 	}
-	if !circuitCapacityReached && w.prioritizedTx != nil && w.current.header.Number.Uint64() == w.prioritizedTx.blockNumber {
+	if !circuitCapacityOrBlockTimeReached && w.prioritizedTx != nil && w.current.header.Number.Uint64() == w.prioritizedTx.blockNumber {
 		tx := w.prioritizedTx.tx
 		from, _ := types.Sender(w.current.signer, tx) // error already checked before
 		txList := map[common.Address]types.Transactions{from: []*types.Transaction{tx}}
 		txs := types.NewTransactionsByPriceAndNonce(w.current.signer, txList, header.BaseFee)
-		skipCommit, circuitCapacityReached = w.commitTransactions(txs, w.coinbase, interrupt)
+		skipCommit, circuitCapacityOrBlockTimeReached = w.commitTransactions(txs, w.coinbase, interrupt)
 		if skipCommit {
 			l2CommitNewWorkPrioritizedTxCommitTimer.UpdateSince(prioritizedTxStart)
 			return
@@ -1553,24 +1553,24 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 	l2CommitNewWorkPrioritizedTxCommitTimer.UpdateSince(prioritizedTxStart)
 
 	remoteLocalStart := time.Now()
-	if len(localTxs) > 0 && !circuitCapacityReached {
+	if len(localTxs) > 0 && !circuitCapacityOrBlockTimeReached {
 		localTxPriceAndNonceStart := time.Now()
 		txs := types.NewTransactionsByPriceAndNonce(w.current.signer, localTxs, header.BaseFee)
 		l2CommitNewWorkLocalPriceAndNonceTimer.UpdateSince(localTxPriceAndNonceStart)
 
-		skipCommit, circuitCapacityReached = w.commitTransactions(txs, w.coinbase, interrupt)
+		skipCommit, circuitCapacityOrBlockTimeReached = w.commitTransactions(txs, w.coinbase, interrupt)
 		if skipCommit {
 			l2CommitNewWorkRemoteLocalCommitTimer.UpdateSince(remoteLocalStart)
 			return
 		}
 	}
 
-	if len(remoteTxs) > 0 && !circuitCapacityReached {
+	if len(remoteTxs) > 0 && !circuitCapacityOrBlockTimeReached {
 		remoteTxPriceAndNonceStart := time.Now()
 		txs := types.NewTransactionsByPriceAndNonce(w.current.signer, remoteTxs, header.BaseFee)
 		l2CommitNewWorkRemotePriceAndNonceTimer.UpdateSince(remoteTxPriceAndNonceStart)
 
-		// don't need to get `circuitCapacityReached` here because we don't have further `commitTransactions`
+		// don't need to get `circuitCapacityOrBlockTimeReached` here because we don't have further `commitTransactions`
 		// after this one, and if we assign it won't take effect (`ineffassign`)
 		skipCommit, _ = w.commitTransactions(txs, w.coinbase, interrupt)
 		if skipCommit {
