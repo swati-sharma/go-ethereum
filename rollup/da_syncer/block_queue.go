@@ -3,6 +3,7 @@ package da_syncer
 import (
 	"context"
 	"fmt"
+	"math/big"
 
 	"github.com/scroll-tech/go-ethereum/core/types"
 )
@@ -38,48 +39,42 @@ func (bq *BlockQueue) getBlocksFromBatch(ctx context.Context) error {
 	}
 	switch daEntry := daEntry.(type) {
 	case *CommitBatchDaV0:
-		// to be implemented in codecv0
-		// bq.blocks := codecv0.DecodeFromCalldata(daEntry)
+		bq.blocks, err = bq.processDaV0ToBlocks(daEntry)
+		if err != nil {
+			return err
+		}
 	default:
 		return fmt.Errorf("unexpected type of daEntry: %T", daEntry)
 	}
 	return nil
 }
-/*
 
-func (s *DaSyncer) processDaToBlocks(daEntry *DAEntry) ([]*types.Block, error) {
+func (bq *BlockQueue) processDaV0ToBlocks(daEntry *CommitBatchDaV0) ([]*types.Block, error) {
 	var blocks []*types.Block
 	l1TxIndex := 0
 	for _, chunk := range daEntry.Chunks {
-		l2TxIndex := 0
-		for _, blockContext := range chunk.BlockContexts {
+		for blockId, daBlock := range chunk.Blocks {
 			// create header
 			header := types.Header{
-				Number:   big.NewInt(0).SetUint64(blockContext.BlockNumber),
-				Time:     blockContext.Timestamp,
-				BaseFee:  blockContext.BaseFee,
-				GasLimit: blockContext.GasLimit,
+				Number:   big.NewInt(0).SetUint64(daBlock.BlockNumber),
+				Time:     daBlock.Timestamp,
+				BaseFee:  daBlock.BaseFee,
+				GasLimit: daBlock.GasLimit,
 			}
 			// create txs
 			// var txs types.Transactions
-			txs := make(types.Transactions, 0, blockContext.NumTransactions)
+			txs := make(types.Transactions, 0, daBlock.NumTransactions)
 			// insert l1 msgs
-			for id := 0; id < int(blockContext.NumL1Messages); id++ {
+			for id := 0; id < int(daBlock.NumL1Messages); id++ {
 				l1Tx := types.NewTx(daEntry.L1Txs[l1TxIndex])
 				txs = append(txs, l1Tx)
 				l1TxIndex++
 			}
 			// insert l2 txs
-			for id := int(blockContext.NumL1Messages); id < int(blockContext.NumTransactions); id++ {
-				l2Tx := &types.Transaction{}
-				l2Tx.UnmarshalBinary(chunk.L2Txs[l2TxIndex])
-				txs = append(txs, l2Tx)
-				l2TxIndex++
-			}
+			txs = append(txs, chunk.Transactions[blockId]...)
 			block := types.NewBlockWithHeader(&header).WithBody(txs, make([]*types.Header, 0))
 			blocks = append(blocks, block)
 		}
 	}
 	return blocks, nil
 }
-*/

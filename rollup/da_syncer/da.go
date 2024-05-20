@@ -1,6 +1,7 @@
 package da_syncer
 
 import (
+	"github.com/scroll-tech/go-ethereum/core/types"
 	"github.com/scroll-tech/go-ethereum/rollup/types/encoding/codecv0"
 )
 
@@ -27,10 +28,11 @@ type CommitBatchDaV0 struct {
 	BatchIndex             uint64
 	ParentBatchHeader      *codecv0.DABatch
 	SkippedL1MessageBitmap []byte
-	Chunks                 Chunks
+	Chunks                 []*codecv0.DAChunkRawTx
+	L1Txs                  []*types.L1MessageTx
 }
 
-func NewCommitBatchDaV0(version uint8, batchIndex uint64, parentBatchHeader *codecv0.DABatch, skippedL1MessageBitmap []byte, chunks Chunks) DAEntry {
+func NewCommitBatchDaV0(version uint8, batchIndex uint64, parentBatchHeader *codecv0.DABatch, skippedL1MessageBitmap []byte, chunks []*codecv0.DAChunkRawTx, l1Txs []*types.L1MessageTx) DAEntry {
 	return &CommitBatchDaV0{
 		DaType:                 CommitBatchV0,
 		Version:                version,
@@ -38,6 +40,7 @@ func NewCommitBatchDaV0(version uint8, batchIndex uint64, parentBatchHeader *cod
 		ParentBatchHeader:      parentBatchHeader,
 		SkippedL1MessageBitmap: skippedL1MessageBitmap,
 		Chunks:                 chunks,
+		L1Txs:                  l1Txs,
 	}
 }
 

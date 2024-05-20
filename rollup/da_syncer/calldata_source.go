@@ -8,7 +8,9 @@ import (
 
 	"github.com/scroll-tech/go-ethereum/accounts/abi"
 	"github.com/scroll-tech/go-ethereum/common"
+	"github.com/scroll-tech/go-ethereum/core/rawdb"
 	"github.com/scroll-tech/go-ethereum/core/types"
+	"github.com/scroll-tech/go-ethereum/ethdb"
 	"github.com/scroll-tech/go-ethereum/log"
 	"github.com/scroll-tech/go-ethereum/rollup/types/encoding/codecv0"
 )
@@ -26,9 +28,10 @@ type CalldataSource struct {
 	l1CommitBatchEventSignature   common.Hash
 	l1RevertBatchEventSignature   common.Hash
 	l1FinalizeBatchEventSignature common.Hash
+	db                            ethdb.Database
 }
 
-func NewCalldataSource(ctx context.Context, l1height, maxL1Height uint64, l1Client *L1Client) (DataSource, error) {
+func NewCalldataSource(ctx context.Context, l1height, maxL1Height uint64, l1Client *L1Client, db ethdb.Database) (DataSource, error) {
 	scrollChainABI, err := scrollChainMetaData.GetAbi()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get scroll chain abi: %w", err)
@@ -42,6 +45,7 @@ func NewCalldataSource(ctx context.Context, l1height, maxL1Height uint64, l1Clie
 		l1CommitBatchEventSignature:   scrollChainABI.Events["CommitBatch"].ID,
 		l1RevertBatchEventSignature:   scrollChainABI.Events["RevertBatch"].ID,
 		l1FinalizeBatchEventSignature: scrollChainABI.Events["FinalizeBatch"].ID,
+		db:                            db,
 	}, nil
 }
 
@@ -57,6 +61,7 @@ func (ds *CalldataSource) NextData() (DA, error) {
 	if err != nil {
 		return nil, fmt.Errorf("cannot get events, l1height: %d, error: %v", ds.l1height, err)
 	}
+	ds.l1height = to + 1
 	return ds.processLogsToDA(logs)
 }
 
@@ -109,9 +114,10 @@ func (ds *CalldataSource) processLogsToDA(logs []types.Log) (DA, error) {
 }
 
 func (ds *CalldataSource) getCommitBatchDa(batchIndex uint64, vLog *types.Log) (DAEntry, error) {
-	var chunks Chunks
+	var chunks []*codecv0.DAChunkRawTx
+	var l1Txs []*types.L1MessageTx
 	if batchIndex == 0 {
-		return NewCommitBatchDaV0(0, batchIndex, nil, []byte{}, chunks), nil
+		return NewCommitBatchDaV0(0, batchIndex, nil, []byte{}, chunks, l1Txs), nil
 	}
 
 	txData, err := ds.l1Client.fetchTxData(ds.ctx, vLog)
@@ -146,7 +152,7 @@ func (ds *CalldataSource) getCommitBatchDa(batchIndex uint64, vLog *types.Log) (
 	}
 
 	// todo: use codecv0 chunks
-	chunks, err = decodeChunks(args.Chunks)
+	chunks, err = codecv0.DecodeDAChunksRawTx(args.Chunks)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unpack chunks: %v, err: %w", batchIndex, err)
 	}
@@ -154,41 +160,45 @@ func (ds *CalldataSource) getCommitBatchDa(batchIndex uint64, vLog *types.Log) (
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode batch bytes into batch, values: %v, err: %w", args.ParentBatchHeader, err)
 	}
-	da := NewCommitBatchDaV0(args.Version, batchIndex, parentBatchHeader, args.SkippedL1MessageBitmap, chunks)
-	return da, nil
 
-	// parentTotalL1MessagePopped := getBatchTotalL1MessagePopped(args.ParentBatchHeader)
-	// totalL1MessagePopped := countTotalL1MessagePopped(chunks)
-	// skippedBitmap, err := decodeBitmap(args.SkippedL1MessageBitmap, totalL1MessagePopped)
-	// if err != nil {
-	// 	return nil, nil, fmt.Errorf("failed to decode bitmap: %v, err: %w", batchIndex, err)
-	// }
-	// // get all necessary l1msgs without skipped
-	// currentIndex := parentTotalL1MessagePopped
-	// for index := 0; index < int(totalL1MessagePopped); index++ {
-	// 	for isL1MessageSkipped(skippedBitmap, currentIndex-parentTotalL1MessagePopped) {
-	// 		currentIndex++
-	// 	}
-	// 	l1Tx := rawdb.ReadL1Message(ds.db, currentIndex)
-	// 	if l1Tx == nil {
-	// 		return nil, nil, fmt.Errorf("failed to read L1 message from db, l1 message index: %v", currentIndex)
-	// 	}
-	// 	l1Txs = append(l1Txs, l1Tx)
-	// 	currentIndex++
-	// }
-	// return chunks, l1Txs, nil
+	parentTotalL1MessagePopped := parentBatchHeader.TotalL1MessagePopped
+	totalL1MessagePopped := 0
+	for _, chunk := range chunks {
+		for _, block := range chunk.Blocks {
+			totalL1MessagePopped += int(block.NumL1Messages)
+		}
+	}
+	skippedBitmap, err := decodeBitmap(args.SkippedL1MessageBitmap, totalL1MessagePopped)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode bitmap: %v, err: %w", batchIndex, err)
+	}
+	// get all necessary l1msgs without skipped
+	currentIndex := parentTotalL1MessagePopped
+	for index := 0; index < int(totalL1MessagePopped); index++ {
+		for isL1MessageSkipped(skippedBitmap, currentIndex-parentTotalL1MessagePopped) {
+			currentIndex++
+		}
+		l1Tx := rawdb.ReadL1Message(ds.db, currentIndex)
+		if l1Tx == nil {
+			return nil, fmt.Errorf("failed to read L1 message from db, l1 message index: %v", currentIndex)
+		}
+		l1Txs = append(l1Txs, l1Tx)
+		currentIndex++
+	}
+	da := NewCommitBatchDaV0(args.Version, batchIndex, parentBatchHeader, args.SkippedL1MessageBitmap, chunks, l1Txs)
+	return da, nil
 }
 
 func getBatchTotalL1MessagePopped(batchHeader []byte) uint64 {
 	return binary.BigEndian.Uint64(batchHeader[17:25])
 }
 
-func decodeBitmap(skippedL1MessageBitmap []byte, totalL1MessagePopped uint64) ([]*big.Int, error) {
+func decodeBitmap(skippedL1MessageBitmap []byte, totalL1MessagePopped int) ([]*big.Int, error) {
 	length := len(skippedL1MessageBitmap)
 	if length%32 != 0 {
 		return nil, fmt.Errorf("skippedL1MessageBitmap length doesn't match, skippedL1MessageBitmap length should be equal 0 modulo 32, length of skippedL1MessageBitmap: %v", length)
 	}
-	if length*8 < int(totalL1MessagePopped) {
+	if length*8 < totalL1MessagePopped {
 		return nil, fmt.Errorf("skippedL1MessageBitmap length is too small, skippedL1MessageBitmap length should be at least %v, length of skippedL1MessageBitmap: %v", (totalL1MessagePopped+7)/8, length)
 	}
 	var skippedBitmap []*big.Int

@@ -19,7 +19,7 @@ func NewDaQueue(l1height uint64, dataSourceFactory *DataSourceFactory) *DaQueue 
 }
 
 func (dq *DaQueue) NextDA(ctx context.Context) (DAEntry, error) {
-	if len(dq.da) == 0 {
+	for len(dq.da) == 0 {
 		err := dq.getNextData(ctx)
 		if err != nil {
 			return nil, err

@@ -74,7 +74,7 @@ type Ethereum struct {
 	txPool             *core.TxPool
 	syncService        *sync_service.SyncService
 	rollupSyncService  *rollup_sync_service.RollupSyncService
-	daSyncer           *da_syncer.DaSyncer
+	syncingPipeline    *da_syncer.SyncingPipeline
 	blockchain         *core.BlockChain
 	handler            *handler
 	ethDialCandidates  enode.Iterator
@@ -236,11 +236,11 @@ func New(stack *node.Node, config *ethconfig.Config, l1Client sync_service.EthCl
 	}
 
 	if config.EnableDASyncing {
-		eth.daSyncer, err = da_syncer.NewDaSyncer(context.Background(), eth.blockchain, chainConfig, eth.chainDb, l1Client, stack.Config().L1DeploymentBlock, config.DA)
+		eth.syncingPipeline, err = da_syncer.NewSyncingPipeline(context.Background(), eth.blockchain, chainConfig, eth.chainDb, l1Client, stack.Config().L1DeploymentBlock, config.DA)
 		if err != nil {
 			return nil, fmt.Errorf("cannot initialize da syncer: %w", err)
 		}
-		eth.daSyncer.Start()
+		eth.syncingPipeline.Start()
 	}
 
 	// Permit the downloader to use the trie cache allowance during fast sync
@@ -605,7 +605,7 @@ func (s *Ethereum) Stop() error {
 		s.rollupSyncService.Stop()
 	}
 	if s.config.EnableDASyncing {
-		s.daSyncer.Stop()
+		s.syncingPipeline.Stop()
 	}
 	s.miner.Close()
 	s.blockchain.Stop()

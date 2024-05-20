@@ -6,7 +6,9 @@ import (
 	"time"
 
 	"github.com/scroll-tech/go-ethereum/core"
+	"github.com/scroll-tech/go-ethereum/core/rawdb"
 	"github.com/scroll-tech/go-ethereum/ethdb"
+	"github.com/scroll-tech/go-ethereum/log"
 	"github.com/scroll-tech/go-ethereum/params"
 	"github.com/scroll-tech/go-ethereum/rollup/sync_service"
 )
@@ -22,9 +24,11 @@ var (
 )
 
 // defaultSyncInterval is the frequency at which we query for new rollup event.
-const defaultSyncInterval = 45 * time.Second
+const defaultSyncInterval = 1 * time.Second
 
 type SyncingPipeline struct {
+	ctx        context.Context
+	cancel     context.CancelFunc
 	db         ethdb.Database
 	blockchain *core.BlockChain
 	blockQueue *BlockQueue
@@ -32,22 +36,30 @@ type SyncingPipeline struct {
 }
 
 func NewSyncingPipeline(ctx context.Context, blockchain *core.BlockChain, genesisConfig *params.ChainConfig, db ethdb.Database, ethClient sync_service.EthClient, l1DeploymentBlock uint64, config Config) (*SyncingPipeline, error) {
+	ctx, cancel := context.WithCancel(ctx)
 	var err error
 
 	l1Client, err := newL1Client(ctx, genesisConfig, ethClient)
 	if err != nil {
+		cancel()
 		return nil, err
 	}
 
-	dataSourceFactory := NewDataSourceFactory(blockchain, genesisConfig, config, l1Client)
+	dataSourceFactory := NewDataSourceFactory(blockchain, genesisConfig, config, l1Client, db)
 	// todo: keep synced l1 height somewhere
-	var syncedL1Height uint64 = 0
+	var syncedL1Height uint64 = l1DeploymentBlock - 1
+	from := rawdb.ReadDASyncedL1BlockNumber(db)
+	if from != nil {
+		syncedL1Height = *from
+	}
 	daQueue := NewDaQueue(syncedL1Height, dataSourceFactory)
 	batchQueue := NewBatchQueue(daQueue)
 	blockQueue := NewBlockQueue(batchQueue)
 	daSyncer := NewDaSyncer(blockchain)
 
 	return &SyncingPipeline{
+		ctx:        ctx,
+		cancel:     cancel,
 		db:         db,
 		blockchain: blockchain,
 		blockQueue: blockQueue,
@@ -64,76 +76,40 @@ func (sp *SyncingPipeline) Step(ctx context.Context) error {
 	return err
 }
 
-// func (s *DaSyncer) Start() {
-// 	if s == nil {
-// 		return
-// 	}
+func (sp *SyncingPipeline) Start() {
+	if sp == nil {
+		return
+	}
 
-// 	log.Info("Starting DaSyncer")
+	log.Info("Starting SyncingPipeline")
 
-// 	go func() {
-// 		syncTicker := time.NewTicker(defaultSyncInterval)
-// 		defer syncTicker.Stop()
+	go func() {
+		syncTicker := time.NewTicker(defaultSyncInterval)
+		defer syncTicker.Stop()
 
-// 		for {
-// 			s.syncWithDa()
-// 			select {
-// 			case <-s.ctx.Done():
-// 				return
-// 			case <-syncTicker.C:
-// 				continue
-// 			}
-// 		}
-// 	}()
-// }
+		for {
+			err := sp.Step(sp.ctx)
+			if err != nil {
+				log.Warn("syncing pipeline step failed", "err", err)
+			}
+			select {
+			case <-sp.ctx.Done():
+				return
+			case <-syncTicker.C:
+				continue
+			}
+		}
+	}()
+}
 
-// func (s *DaSyncer) Stop() {
-// 	if s == nil {
-// 		return
-// 	}
+func (sp *SyncingPipeline) Stop() {
+	if sp == nil {
+		return
+	}
 
-// 	log.Info("Stopping DaSyncer")
+	log.Info("Stopping DaSyncer")
 
-// 	if s.cancel != nil {
-// 		s.cancel()
-// 	}
-// }
-
-// func (s *DaSyncer) syncWithDa() {
-// 	log.Info("DaSyncer syncing")
-// 	da, to, err := s.DaFetcher.FetchDA()
-// 	if err != nil {
-// 		log.Error("failed to fetch DA", "err", err)
-// 		return
-// 	}
-// 	for _, daEntry := range da {
-// 		switch daEntry.DaType {
-// 		case CommitBatch:
-// 			blocks, err := s.processDaToBlocks(daEntry)
-// 			if err != nil {
-// 				log.Warn("failed to process DA to blocks", "err", err)
-// 				return
-// 			}
-// 			log.Debug("commit batch", "batchindex", daEntry.BatchIndex)
-// 			s.batches[daEntry.BatchIndex] = blocks
-// 		case RevertBatch:
-// 			log.Debug("revert batch", "batchindex", daEntry.BatchIndex)
-// 			delete(s.batches, daEntry.BatchIndex)
-// 		case FinalizeBatch:
-// 			log.Debug("finalize batch", "batchindex", daEntry.BatchIndex)
-// 			blocks, ok := s.batches[daEntry.BatchIndex]
-// 			if !ok {
-// 				log.Warn("cannot find blocks for batch", "batch index", daEntry.BatchIndex, "err", err)
-// 				return
-// 			}
-// 			err := s.insertBlocks(blocks)
-// 			if err != nil {
-// 				log.Warn("cannot insert blocks for batch", "batch index", daEntry.BatchIndex, "err", err)
-// 				return
-// 			}
-// 		}
-// 	}
-// 	rawdb.WriteDASyncedL1BlockNumber(s.db, to)
-// 	s.DaFetcher.SetLatestProcessedBlock(to)
-// 	log.Info("DaSyncer synced")
-// }
+	if sp.cancel != nil {
+		sp.cancel()
+	}
+}
