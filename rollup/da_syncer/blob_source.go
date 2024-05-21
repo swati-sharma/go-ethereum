@@ -11,16 +11,16 @@ import (
 	"github.com/scroll-tech/go-ethereum/ethdb"
 	"github.com/scroll-tech/go-ethereum/log"
 	"github.com/scroll-tech/go-ethereum/rollup/types/encoding"
-	"github.com/scroll-tech/go-ethereum/rollup/types/encoding/codecv0"
 )
 
 var (
-	callDataSourceFetchBlockRange uint64 = 100
+	blobSourceFetchBlockRange uint64 = 100
 )
 
-type CalldataSource struct {
+type BlobDataSource struct {
 	ctx                           context.Context
 	l1Client                      *L1Client
+	blobClient                    *BlobClient
 	l1height                      uint64
 	maxL1Height                   uint64
 	scrollChainABI                *abi.ABI
@@ -30,14 +30,15 @@ type CalldataSource struct {
 	db                            ethdb.Database
 }
 
-func NewCalldataSource(ctx context.Context, l1height, maxL1Height uint64, l1Client *L1Client, db ethdb.Database) (DataSource, error) {
+func NewBlobDataSource(ctx context.Context, l1height, maxL1Height uint64, l1Client *L1Client, blobClient *BlobClient, db ethdb.Database) (DataSource, error) {
 	scrollChainABI, err := scrollChainMetaData.GetAbi()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get scroll chain abi: %w", err)
 	}
-	return &CalldataSource{
+	return &BlobDataSource{
 		ctx:                           ctx,
 		l1Client:                      l1Client,
+		blobClient:                    blobClient,
 		l1height:                      l1height,
 		maxL1Height:                   maxL1Height,
 		scrollChainABI:                scrollChainABI,
@@ -48,7 +49,7 @@ func NewCalldataSource(ctx context.Context, l1height, maxL1Height uint64, l1Clie
 	}, nil
 }
 
-func (ds *CalldataSource) NextData() (DA, error) {
+func (ds *BlobDataSource) NextData() (DA, error) {
 	to := ds.l1height + callDataSourceFetchBlockRange
 	if to > ds.maxL1Height {
 		to = ds.maxL1Height
@@ -64,11 +65,11 @@ func (ds *CalldataSource) NextData() (DA, error) {
 	return ds.processLogsToDA(logs)
 }
 
-func (ds *CalldataSource) L1Height() uint64 {
+func (ds *BlobDataSource) L1Height() uint64 {
 	return ds.l1height
 }
 
-func (ds *CalldataSource) processLogsToDA(logs []types.Log) (DA, error) {
+func (ds *BlobDataSource) processLogsToDA(logs []types.Log) (DA, error) {
 	var da DA
 	for _, vLog := range logs {
 		switch vLog.Topics[0] {
@@ -112,8 +113,8 @@ func (ds *CalldataSource) processLogsToDA(logs []types.Log) (DA, error) {
 	return da, nil
 }
 
-func (ds *CalldataSource) getCommitBatchDa(batchIndex uint64, vLog *types.Log) (DAEntry, error) {
-	var chunks []*codecv0.DAChunkRawTx
+func (ds *BlobDataSource) getCommitBatchDa(batchIndex uint64, vLog *types.Log) (DAEntry, error) {
+	var chunks []*codecv1.DAChunkRawTx
 	var l1Txs []*types.L1MessageTx
 	if batchIndex == 0 {
 		return NewCommitBatchDaV0(0, batchIndex, nil, []byte{}, chunks, l1Txs), nil
@@ -150,12 +151,12 @@ func (ds *CalldataSource) getCommitBatchDa(batchIndex uint64, vLog *types.Log) (
 		return nil, fmt.Errorf("failed to decode calldata into commitBatch args, values: %+v, err: %w", values, err)
 	}
 
-	// todo: use codecv0 chunks
-	chunks, err = codecv0.DecodeDAChunksRawTx(args.Chunks)
+	// todo: use codecv1 chunks
+	chunks, err = codecv1.DecodeDAChunksRawTx(args.Chunks)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unpack chunks: %v, err: %w", batchIndex, err)
 	}
-	parentBatchHeader, err := codecv0.NewDABatchFromBytes(args.ParentBatchHeader)
+	parentBatchHeader, err := codecv1.NewDABatchFromBytes(args.ParentBatchHeader)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode batch bytes into batch, values: %v, err: %w", args.ParentBatchHeader, err)
 	}
