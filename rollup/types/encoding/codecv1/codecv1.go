@@ -55,6 +55,7 @@ func init() {
 
 // CodecV1Version denotes the version of the codec.
 const CodecV1Version = 1
+const blockContextByteSize = 60
 
 // DABlock represents a Data Availability Block.
 type DABlock struct {
@@ -70,6 +71,12 @@ type DABlock struct {
 type DAChunk struct {
 	Blocks       []*DABlock
 	Transactions [][]*types.TransactionData
+}
+
+// DAChunkRawTx groups consecutive DABlocks with their transactions.
+type DAChunkRawTx struct {
+	Blocks       []*DABlock
+	Transactions []types.Transactions
 }
 
 // DABatch contains metadata about a batch of DAChunks.
@@ -186,6 +193,40 @@ func (c *DAChunk) Encode() []byte {
 	}
 
 	return chunkBytes
+}
+
+// DecodeDAChunksRawTx takes a byte slice and decodes it into a []DAChunkRawTx.
+func DecodeDAChunksRawTx(bytes [][]byte) ([]*DAChunkRawTx, error) {
+	var chunks []*DAChunkRawTx
+	for _, chunk := range bytes {
+		if len(chunk) < 1 {
+			return nil, fmt.Errorf("invalid chunk, length is less than 1")
+		}
+
+		numBlocks := int(chunk[0])
+		if len(chunk) < 1+numBlocks*blockContextByteSize {
+			return nil, fmt.Errorf("chunk size doesn't match with numBlocks, byte length of chunk: %v, expected length: %v", len(chunk), 1+numBlocks*blockContextByteSize)
+		}
+
+		blocks := make([]*DABlock, numBlocks)
+		for i := 0; i < numBlocks; i++ {
+			startIdx := 1 + i*blockContextByteSize // add 1 to skip numBlocks byte
+			endIdx := startIdx + blockContextByteSize
+			block, err := DecodeDABlock(chunk[startIdx:endIdx])
+			if err != nil {
+				return nil, err
+			}
+			blocks[i] = block
+		}
+
+		var transactions []types.Transactions
+
+		chunks = append(chunks, &DAChunkRawTx{
+			Blocks:       blocks,
+			Transactions: transactions,
+		})
+	}
+	return chunks, nil
 }
 
 // Hash computes the hash of the DAChunk data.
