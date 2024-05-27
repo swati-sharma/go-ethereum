@@ -510,7 +510,7 @@ func TestValidateBatchCodecv2(t *testing.T) {
 	parentBatchMeta1 := &rawdb.FinalizedBatchMeta{}
 	event1 := &L1FinalizeBatchEvent{
 		BatchIndex:   big.NewInt(0),
-		BatchHash:    common.HexToHash("0x8ab6de3c2ded348c9e4a22b5f8f6506c1d95f06381dc71a0f048cb55bebca5e1"),
+		BatchHash:    common.HexToHash("0xaccf37a0b974f2058692d366b2ea85502c99db4a0bcb9b77903b49bf866a463b"),
 		StateRoot:    chunk3.Blocks[len(chunk3.Blocks)-1].Header.Root,
 		WithdrawRoot: chunk3.Blocks[len(chunk3.Blocks)-1].WithdrawRoot,
 	}
@@ -531,7 +531,7 @@ func TestValidateBatchCodecv2(t *testing.T) {
 	assert.Equal(t, parentBatchMeta2, finalizedBatchMeta1)
 	event2 := &L1FinalizeBatchEvent{
 		BatchIndex:   big.NewInt(1),
-		BatchHash:    common.HexToHash("0xc92f0c45a8b4831815f8048c494e237618bfcfa590f6786ec67a30a8fe0f1244"),
+		BatchHash:    common.HexToHash("0x62ec61e1fdb334868ffd471df601f6858e692af01d42b5077c805a9fd4558c91"),
 		StateRoot:    chunk4.Blocks[len(chunk4.Blocks)-1].Header.Root,
 		WithdrawRoot: chunk4.Blocks[len(chunk4.Blocks)-1].WithdrawRoot,
 	}
@@ -601,7 +601,7 @@ func TestValidateBatchUpgrades(t *testing.T) {
 	assert.Equal(t, parentBatchMeta3, finalizedBatchMeta2)
 	event3 := &L1FinalizeBatchEvent{
 		BatchIndex:   big.NewInt(2),
-		BatchHash:    common.HexToHash("0x655e8e386faf2d2508f6d3cd94c5462c5b3549cf0cfc698ec348c727d12525c0"),
+		BatchHash:    common.HexToHash("0x871ba3c4ed8821ffc438c5468f1e996a6c4325fd8b53066c2783e54b3b7e9e24"),
 		StateRoot:    chunk4.Blocks[len(chunk4.Blocks)-1].Header.Root,
 		WithdrawRoot: chunk4.Blocks[len(chunk4.Blocks)-1].WithdrawRoot,
 	}
