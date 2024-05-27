@@ -15,7 +15,6 @@ libzkp:
 
 libzstd:
 	@sudo mkdir -p $(SCROLL_LIB_PATH)
-	@sudo wget -O $(SCROLL_LIB_PATH)/libzktrie.so https://github.com/scroll-tech/da-codec/releases/download/$(LIBSCROLL_ZSTD_VERSION)/libzktrie.so
 	@sudo wget -O $(SCROLL_LIB_PATH)/libscroll_zstd.so https://github.com/scroll-tech/da-codec/releases/download/$(LIBSCROLL_ZSTD_VERSION)/libscroll_zstd.so
 
 nccc_geth: libzstd ## geth without circuit capacity checker

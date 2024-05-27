@@ -11,7 +11,6 @@ export SCROLL_LIB_PATH=/scroll/lib
 
 mkdir -p $SCROLL_LIB_PATH
 wget -O $SCROLL_LIB_PATH/libscroll_zstd.so https://github.com/scroll-tech/da-codec/releases/download/$LIBSCROLL_ZSTD_VERSION/libscroll_zstd.so
-wget -O $SCROLL_LIB_PATH/libzktrie.so https://github.com/scroll-tech/da-codec/releases/download/$LIBSCROLL_ZSTD_VERSION/libscroll_zstd.so
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$SCROLL_LIB_PATH
 export CGO_LDFLAGS="-L$SCROLL_LIB_PATH -Wl,-rpath,$SCROLL_LIB_PATH"
 go test -v -race ./rollup/rollup_sync_service/...
