@@ -114,3 +114,14 @@ jobs:
         make test
     - name: Upload coverage report
       run: bash <(curl -s https://codecov.io/bash)
+  semgrep:
+      name: semgrep/ci
+      runs-on: ubuntu-20.04
+      env:
+        SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
+      container:
+        image: semgrep/semgrep
+      steps:
+        - uses: actions/checkout@v3
+        - run: semgrep ci
+   
