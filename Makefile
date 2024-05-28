@@ -7,7 +7,7 @@
 GOBIN = ./build/bin
 GO ?= latest
 GORUN = go run
-LIBSCROLL_ZSTD_VERSION = v0.0.0-rc1-ubuntu20.04
+LIBSCROLL_ZSTD_VERSION = v0.1.0-rc0-ubuntu20.04
 SCROLL_LIB_PATH = /scroll/lib
 
 libzkp:
